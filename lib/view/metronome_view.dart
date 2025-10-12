@@ -372,9 +372,12 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     return Container(
       margin: const EdgeInsets.symmetric(
         horizontal: 16,
-        vertical: 4,
-      ), // Reduced margins
-      padding: const EdgeInsets.all(12), // Reduced from 16
+        vertical: 2,
+      ), // Reduced vertical margin further
+      padding: const EdgeInsets.symmetric(
+        vertical: 8,
+        horizontal: 12,
+      ), // Reduced vertical padding
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -393,18 +396,19 @@ class _MetronomeScreenState extends State<MetronomeScreen>
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min, // Added this to minimize height
         children: [
           Text(
             'Time Signature',
             style: TextStyle(
-              fontSize: 14, // Reduced from 16
+              fontSize: 13, // Reduced from 14
               fontWeight: FontWeight.bold,
               color: Colors.grey.shade300,
             ),
           ),
-          const SizedBox(height: 8), // Reduced from 12
+          const SizedBox(height: 6), // Reduced from 8
           SizedBox(
-            height: 40, // Reduced from 50
+            height: 36, // Reduced from 40
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: List.generate(_timeSignatures.length, (index) {
@@ -420,9 +424,9 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                   },
                   child: Container(
                     margin: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                    ), // Reduced from 8
-                    width: 55, // Reduced from 60
+                      horizontal: 5,
+                    ), // Reduced from 6
+                    width: 50, // Reduced from 55
                     decoration: BoxDecoration(
                       gradient: isSelected
                           ? const LinearGradient(
@@ -436,8 +440,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                               colors: [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
                             ),
                       borderRadius: BorderRadius.circular(
-                        12,
-                      ), // Reduced from 15
+                        10,
+                      ), // Reduced from 12
                       border: Border.all(
                         color: isSelected
                             ? Colors.white
@@ -448,8 +452,8 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                           ? [
                               BoxShadow(
                                 color: const Color(0xFF8A2387).withOpacity(0.5),
-                                blurRadius: 8, // Reduced from 10
-                                offset: const Offset(0, 3), // Reduced from 4
+                                blurRadius: 6, // Reduced from 8
+                                offset: const Offset(0, 2), // Reduced from 3
                               ),
                             ]
                           : null,
@@ -458,7 +462,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                       child: Text(
                         '$signature/4',
                         style: TextStyle(
-                          fontSize: 14, // Reduced from 16
+                          fontSize: 12, // Reduced from 14
                           fontWeight: FontWeight.bold,
                           color: isSelected ? Colors.white : Colors.white70,
                         ),

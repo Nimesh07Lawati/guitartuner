@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:guitartuner/view/guitar_tuner_view.dart';
+import 'package:guitartuner/view/metronome_view.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -7,13 +8,13 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Gradient AppBar using flexibleSpace
+      // Electric Guitar Gradient AppBar
       appBar: AppBar(
         title: const Text(
           'Guitar Tools',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.transparent, // Important for gradient to show
+        backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -21,25 +22,27 @@ class HomeScreen extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF360033), // Deep purple
-                Color(0xFF0b8793), // Teal blue
+                Color(0xFF8A2387), // Electric Purple
+                Color(0xFFF27121), // Bright Orange
+                Color(0xFFE94057), // Hot Pink
               ],
+              stops: [0.0, 0.5, 1.0],
             ),
           ),
         ),
         foregroundColor: Colors.white,
       ),
 
-      // Gradient Body Background
+      // Dark Background Gradient
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF1a1a2e), // Dark blue
-              Color(0xFF16213e), // Slightly lighter dark blue
-              Color(0xFF0f3460), // Navy blue
+              Color(0xFF141414), // Near Black
+              Color(0xFF2D2D2D), // Dark Gray
+              Color(0xFF1A1A1A), // Darker Gray
             ],
             stops: [0.1, 0.5, 0.9],
           ),
@@ -48,8 +51,12 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // App Icon/Logo with light color
-              Icon(Icons.music_note, size: 80, color: Colors.white70),
+              // App Icon/Logo with accent color
+              Icon(
+                Icons.music_note,
+                size: 80,
+                color: Color(0xFFF27121), // Using the orange from gradient
+              ),
               const SizedBox(height: 20),
 
               // App Title
@@ -61,8 +68,8 @@ class HomeScreen extends StatelessWidget {
                   color: Colors.white,
                   shadows: [
                     Shadow(
-                      blurRadius: 4.0,
-                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 6.0,
+                      color: Colors.black.withOpacity(0.4),
                       offset: const Offset(2.0, 2.0),
                     ),
                   ],
@@ -78,7 +85,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // Tuner Button with Gradient
+              // Tuner Button with Matching Electric Gradient
               SizedBox(
                 width: 200,
                 height: 60,
@@ -88,17 +95,17 @@ class HomeScreen extends StatelessWidget {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0xFF833ab4), // Purple
-                        Color(0xFFfd1d1d), // Red
-                        Color(0xFFfcb045), // Orange
+                        Color(0xFF8A2387), // Electric Purple
+                        Color(0xFFF27121), // Bright Orange
+                        Color(0xFFE94057), // Hot Pink
                       ],
                       stops: [0.0, 0.5, 1.0],
                     ),
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.purple.withOpacity(0.3),
-                        blurRadius: 8,
+                        color: Color(0xFF8A2387).withOpacity(0.4),
+                        blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -140,41 +147,88 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // Future Features Button
+              // Metallic Style Coming Soon Button
               SizedBox(
                 width: 200,
                 height: 60,
                 child: ElevatedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('More tools coming soon!'),
-                        duration: Duration(seconds: 2),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MetronomeScreen(),
                       ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white.withOpacity(0.2),
+                    backgroundColor: Colors.white.withOpacity(0.1),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                       side: BorderSide(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 1,
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1.5,
                       ),
                     ),
-                    elevation: 3,
+                    elevation: 5,
+                    shadowColor: Colors.black.withOpacity(0.3),
                   ),
                   child: const Text(
-                    'Chord Library\n(Coming Soon)',
+                    'Metronome\n(Coming Soon)',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
+
+              const SizedBox(height: 30),
+
+              // Additional decorative element - Guitar strings
+              Container(
+                margin: const EdgeInsets.only(top: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildGuitarString(Color(0xFF8A2387)),
+                    const SizedBox(width: 8),
+                    _buildGuitarString(Color(0xFFF27121)),
+                    const SizedBox(width: 8),
+                    _buildGuitarString(Color(0xFFE94057)),
+                    const SizedBox(width: 8),
+                    _buildGuitarString(Color(0xFF8A2387)),
+                    const SizedBox(width: 8),
+                    _buildGuitarString(Color(0xFFF27121)),
+                    const SizedBox(width: 8),
+                    _buildGuitarString(Color(0xFFE94057)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Helper method to create guitar string visual
+  Widget _buildGuitarString(Color color) {
+    return Container(
+      width: 3,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        borderRadius: BorderRadius.circular(2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
     );
   }
