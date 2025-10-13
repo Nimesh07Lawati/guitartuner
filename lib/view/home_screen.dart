@@ -174,7 +174,7 @@ class HomeScreen extends StatelessWidget {
                     shadowColor: Colors.black.withOpacity(0.3),
                   ),
                   child: const Text(
-                    'Metronome\n(Coming Soon)',
+                    'Metronome',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),

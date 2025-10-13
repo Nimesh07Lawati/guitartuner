@@ -167,8 +167,9 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     final needleValue = _getNeedleValue().abs();
     if (needleValue < 1) return 'Perfect!';
     if (needleValue < 3) return 'Very Close';
-    if (_currentFrequency < _guitarStrings[_selectedStringIndex].frequency)
+    if (_currentFrequency < _guitarStrings[_selectedStringIndex].frequency) {
       return 'Too Low';
+    }
     return 'Too High';
   }
 
