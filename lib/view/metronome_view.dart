@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class MetronomeScreen extends StatefulWidget {
   const MetronomeScreen({super.key});
@@ -18,6 +19,10 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   int _selectedTimeSignature = 4;
   int _currentBeat = 0;
 
+  // Audio player
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isAudioLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,12 +33,37 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     _swingAnimation = Tween<double>(begin: -0.2, end: 0.2).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+    _loadAudio();
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
+  Future<void> _loadAudio() async {
+    try {
+      // Preload the audio file
+      await _audioPlayer.setSource(AssetSource('audio/tick.mp3'));
+      setState(() {
+        _isAudioLoaded = true;
+      });
+    } catch (e) {
+      print('Error loading audio: $e');
+    }
+  }
+
+  void _playBeatSound() async {
+    if (!_isAudioLoaded) return;
+
+    try {
+      // Create a new player instance for each beat to avoid latency
+      final player = AudioPlayer();
+      await player.setSource(AssetSource('audio/tick.mp3'));
+      await player.resume();
+
+      // Dispose the player after playing to avoid memory leaks
+      player.onPlayerComplete.listen((event) {
+        player.dispose();
+      });
+    } catch (e) {
+      print('Error playing sound: $e');
+    }
   }
 
   void _startMetronome() {
@@ -56,6 +86,9 @@ class _MetronomeScreenState extends State<MetronomeScreen>
 
   void _playBeat() {
     if (!_isPlaying) return;
+
+    // Play sound
+    _playBeatSound();
 
     // Animate the pendulum
     _animationController.forward().then((_) {
@@ -90,6 +123,13 @@ class _MetronomeScreenState extends State<MetronomeScreen>
       return beatNumber == 1 ? Colors.green : const Color(0xFFF27121);
     }
     return Colors.white.withOpacity(0.3);
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   @override
@@ -257,6 +297,15 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                 ),
               ),
             ],
+          ),
+          // Audio status indicator
+          const SizedBox(height: 8),
+          Text(
+            _isAudioLoaded ? 'Audio Ready' : 'Loading Audio...',
+            style: TextStyle(
+              fontSize: 12,
+              color: _isAudioLoaded ? Colors.green : Colors.orange,
+            ),
           ),
         ],
       ),
