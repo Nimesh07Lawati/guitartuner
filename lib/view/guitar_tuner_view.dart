@@ -31,7 +31,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   ];
 
   int _selectedStringIndex = 0;
-  int _selectedTuningModeIndex = 0;
+  final int _selectedTuningModeIndex = 0;
   double _currentFrequency = 0.0;
   bool _isTuning = false;
 
