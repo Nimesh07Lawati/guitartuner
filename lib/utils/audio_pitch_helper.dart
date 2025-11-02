@@ -1,16 +1,43 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter_audio_capture/flutter_audio_capture.dart';
 import 'package:pitch_detector_dart/pitch_detector.dart';
 import 'package:pitch_detector_dart/pitch_detector_result.dart';
 
+// --- Isolate entry function (from Step 1) ---
+void pitchDetectionIsolate(SendPort mainSendPort) {
+  final receivePort = ReceivePort();
+  mainSendPort.send(receivePort.sendPort);
+
+  late PitchDetector detector;
+
+  receivePort.listen((message) async {
+    try {
+      final samples = message[0] as List<double>;
+      final sampleRate = message[1] as int;
+      final bufferSize = message[2] as int;
+      final SendPort replyPort = message[3] as SendPort;
+
+      detector = PitchDetector(
+        audioSampleRate: sampleRate.toDouble(),
+        bufferSize: bufferSize,
+      );
+
+      final result = await detector.getPitchFromFloatBuffer(samples);
+      replyPort.send(result);
+    } catch (e) {
+      print('❌ Isolate error: $e');
+    }
+  });
+}
+
 /// Callback triggered when a new frequency (Hz) is detected.
 typedef FrequencyCallback = void Function(double frequency);
 
 class AudioPitchHelper {
   final _audioCapture = FlutterAudioCapture();
-  late PitchDetector _pitchDetector;
   final FrequencyCallback onFrequencyDetected;
 
   final int sampleRate;
@@ -22,16 +49,17 @@ class AudioPitchHelper {
   int _audioDataCallCount = 0;
   int _validPitchCount = 0;
 
+  // --- Isolate communication ports ---
+  Isolate? _isolate;
+  SendPort? _isolateSendPort;
+  final _receivePort = ReceivePort();
+
   AudioPitchHelper({
     required this.onFrequencyDetected,
     this.sampleRate = 44100,
     this.bufferSize = 2048,
     this.detectionThreshold = 0.8,
   }) {
-    _pitchDetector = PitchDetector(
-      audioSampleRate: sampleRate.toDouble(),
-      bufferSize: bufferSize,
-    );
     print('🎵 AudioPitchHelper created with:');
     print('   - Sample Rate: $sampleRate Hz');
     print('   - Buffer Size: $bufferSize');
@@ -40,17 +68,28 @@ class AudioPitchHelper {
 
   bool get isRunning => _isRunning;
 
+  Future<void> _initIsolate() async {
+    if (_isolateSendPort != null) return; // already initialized
+
+    print('🚀 Spawning pitch detection isolate...');
+    final readyPort = ReceivePort();
+    _isolate = await Isolate.spawn(pitchDetectionIsolate, readyPort.sendPort);
+    _isolateSendPort = await readyPort.first as SendPort;
+    print('✅ Pitch detection isolate ready');
+  }
+
   Future<void> start() async {
     if (_isRunning) {
       print('⚠️ AudioPitchHelper already running');
       return;
     }
 
+    await _initIsolate();
+
     _audioDataCallCount = 0;
     _validPitchCount = 0;
 
     try {
-      // Initialize if not already
       if (!_isInitialized) {
         print('🔧 Initializing FlutterAudioCapture...');
         await _audioCapture.init();
@@ -99,85 +138,59 @@ class AudioPitchHelper {
 
   void _onAudioData(dynamic obj) {
     if (!_isRunning) return;
-
     _audioDataCallCount++;
-    if (_audioDataCallCount % 50 == 0) {
-      print('📡 Audio data callback #$_audioDataCallCount');
-    }
 
-    // Process asynchronously but don't wait
-    _processAudioData(obj);
-  }
+    if (obj is Float32List) {
+      if (_audioDataCallCount == 1) {
+        print('📊 Received Float32List with ${obj.length} samples');
+      }
 
-  Future<void> _processAudioData(dynamic obj) async {
-    try {
-      if (obj is Float32List) {
-        if (_audioDataCallCount == 1) {
-          print('📊 Received Float32List with ${obj.length} samples');
-        }
-        // Convert to List<double> for pitch detector
-        final samples = obj.map((v) => v.toDouble()).toList();
-        final result = await _pitchDetector.getPitchFromFloatBuffer(samples);
-        _handleResult(result);
-      } else if (obj is Uint8List) {
-        if (_audioDataCallCount == 1) {
-          print('📊 Received Uint8List with ${obj.length} samples');
-        }
-        // Pass directly as Uint8List
-        final result = await _pitchDetector.getPitchFromIntBuffer(obj);
-        _handleResult(result);
-      } else if (obj is List) {
-        if (_audioDataCallCount == 1) {
-          print('📊 Received List with ${obj.length} samples');
-        }
-        final samples = obj.map((e) => (e as num).toDouble()).toList();
-        final result = await _pitchDetector.getPitchFromFloatBuffer(samples);
-        _handleResult(result);
-      } else {
-        print('⚠️ Unknown audio data type: ${obj.runtimeType}');
-      }
-    } catch (e) {
-      if (_audioDataCallCount <= 5) {
-        print('❌ AudioPitchHelper process error: $e');
-      }
+      final samples = obj.map((v) => v.toDouble()).toList();
+      _sendToIsolate(samples);
     }
   }
 
-  void _handleResult(PitchDetectorResult? result) {
-    if (result == null) {
-      if (_audioDataCallCount % 100 == 0) {
-        print('⚠️ Pitch detection returned null');
-      }
-      return;
-    }
+  Future<void> _sendToIsolate(List<double> samples) async {
+    if (_isolateSendPort == null) return;
 
-    final double? pitch = result.pitch;
-    final double? probability = result.probability;
-    final bool? pitched = result.pitched;
+    final responsePort = ReceivePort();
+    _isolateSendPort!.send([
+      samples,
+      sampleRate,
+      bufferSize,
+      responsePort.sendPort,
+    ]);
 
-    if (_audioDataCallCount <= 5 ||
-        (pitched == true &&
-            probability != null &&
-            probability > detectionThreshold)) {
-      print(
-        '🎯 Pitch result: pitch=$pitch Hz, probability=$probability, pitched=$pitched',
-      );
+    final result = await responsePort.first;
+    if (result is PitchDetectorResult) {
+      _handleResult(result);
     }
+  }
+
+  void _handleResult(PitchDetectorResult result) {
+    final pitch = result.pitch;
+    final prob = result.probability;
+    final pitched = result.pitched;
 
     if (pitched == true &&
-        probability != null &&
-        probability > detectionThreshold &&
+        prob != null &&
+        prob > detectionThreshold &&
         pitch != null &&
         pitch > 0) {
       _validPitchCount++;
       print(
-        '✅ Valid pitch detected! #$_validPitchCount: $pitch Hz (prob: $probability)',
+        '✅ Valid pitch detected: ${pitch.toStringAsFixed(2)} Hz (prob: ${prob.toStringAsFixed(2)})',
       );
       onFrequencyDetected(pitch);
-    } else if (_audioDataCallCount <= 5) {
-      print(
-        '❌ Invalid pitch: pitched=$pitched, prob=$probability (threshold=$detectionThreshold), pitch=$pitch',
-      );
+    }
+  }
+
+  void dispose() {
+    if (_isolate != null) {
+      print('🧹 Killing pitch detection isolate...');
+      _isolate!.kill(priority: Isolate.immediate);
+      _isolate = null;
+      _isolateSendPort = null;
     }
   }
 

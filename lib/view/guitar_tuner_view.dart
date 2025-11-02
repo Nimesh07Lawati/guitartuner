@@ -49,6 +49,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   @override
   void dispose() {
     _audioHelper.stop();
+    _audioHelper.dispose(); // <-- add this line
     super.dispose();
   }
 
