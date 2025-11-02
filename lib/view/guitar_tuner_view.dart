@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
@@ -31,7 +30,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   ];
 
   int _selectedStringIndex = 0;
-  int _selectedTuningModeIndex = 0;
+  final int _selectedTuningModeIndex = 0;
   double _currentFrequency = 0.0;
   bool _isTuning = false;
 
