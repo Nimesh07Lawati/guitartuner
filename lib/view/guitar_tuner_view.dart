@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
@@ -41,6 +42,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
       onFrequencyDetected: (freq) {
         setState(() => _currentFrequency = freq);
       },
+      detectionThreshold: 0.5,
     );
   }
 
@@ -59,15 +61,19 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
       setState(() => _isTuning = true);
     } else if (status.isPermanentlyDenied) {
       openAppSettings();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enable microphone permission in settings.'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enable microphone permission in settings.'),
+          ),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Microphone permission denied.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied.')),
+        );
+      }
     }
   }
 
