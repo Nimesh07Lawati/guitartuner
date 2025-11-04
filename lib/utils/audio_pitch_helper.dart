@@ -6,7 +6,7 @@ import 'package:flutter_audio_capture/flutter_audio_capture.dart';
 import 'package:pitch_detector_dart/pitch_detector.dart';
 import 'package:pitch_detector_dart/pitch_detector_result.dart';
 
-// --- Isolate entry function (from Step 1) ---
+/// --- Isolate entry function ---
 void pitchDetectionIsolate(SendPort mainSendPort) {
   final receivePort = ReceivePort();
   mainSendPort.send(receivePort.sendPort);
@@ -49,6 +49,13 @@ class AudioPitchHelper {
   int _audioDataCallCount = 0;
   int _validPitchCount = 0;
 
+  // --- Smoothing & Stability ---
+  double _smoothedPitch = 0.0;
+  double _lastStablePitch = 0.0;
+  int _stabilityCounter = 0;
+  final double _smoothingFactor = 0.25; // Lower = smoother, higher = quicker
+  final int _requiredStableFrames = 4;
+
   // --- Isolate communication ports ---
   Isolate? _isolate;
   SendPort? _isolateSendPort;
@@ -57,21 +64,20 @@ class AudioPitchHelper {
   AudioPitchHelper({
     required this.onFrequencyDetected,
     this.sampleRate = 44100,
-    this.bufferSize = 2048,
-    this.detectionThreshold = 0.8,
+    this.bufferSize = 4096, // ✅ more stable for low notes
+    this.detectionThreshold = 0.7,
   }) {
-    print('🎵 AudioPitchHelper created with:');
-    print('   - Sample Rate: $sampleRate Hz');
-    print('   - Buffer Size: $bufferSize');
-    print('   - Detection Threshold: $detectionThreshold');
+    print('🎵 AudioPitchHelper initialized:');
+    print('   • Sample Rate: $sampleRate Hz');
+    print('   • Buffer Size: $bufferSize');
+    print('   • Threshold: $detectionThreshold');
   }
 
   bool get isRunning => _isRunning;
 
   Future<void> _initIsolate() async {
-    if (_isolateSendPort != null) return; // already initialized
-
-    print('🚀 Spawning pitch detection isolate...');
+    if (_isolateSendPort != null) return;
+    print('🚀 Starting pitch detection isolate...');
     final readyPort = ReceivePort();
     _isolate = await Isolate.spawn(pitchDetectionIsolate, readyPort.sendPort);
     _isolateSendPort = await readyPort.first as SendPort;
@@ -80,7 +86,7 @@ class AudioPitchHelper {
 
   Future<void> start() async {
     if (_isRunning) {
-      print('⚠️ AudioPitchHelper already running');
+      print('⚠️ Already running');
       return;
     }
 
@@ -94,7 +100,6 @@ class AudioPitchHelper {
         print('🔧 Initializing FlutterAudioCapture...');
         await _audioCapture.init();
         _isInitialized = true;
-        print('✅ FlutterAudioCapture initialized');
       }
 
       print('🎤 Starting audio capture...');
@@ -105,35 +110,32 @@ class AudioPitchHelper {
         bufferSize: bufferSize,
       );
       _isRunning = true;
-      print('✅ Audio capture started successfully');
+      print('✅ Audio capture started');
     } catch (e) {
-      print('❌ AudioPitchHelper start error: $e');
+      print('❌ Start error: $e');
       _isRunning = false;
       _isInitialized = false;
     }
   }
 
   Future<void> stop() async {
-    if (!_isRunning) {
-      print('⚠️ AudioPitchHelper not running');
-      return;
-    }
+    if (!_isRunning) return;
     try {
       print('🛑 Stopping audio capture...');
       await _audioCapture.stop();
-      print('✅ Audio capture stopped');
+      print('✅ Audio stopped');
       print(
-        '📊 Stats: $_audioDataCallCount audio callbacks, $_validPitchCount valid pitches',
+        '📊 Stats: $_audioDataCallCount calls, $_validPitchCount valid pitches',
       );
     } catch (e) {
-      print('❌ AudioPitchHelper stop error: $e');
+      print('❌ Stop error: $e');
     } finally {
       _isRunning = false;
     }
   }
 
   void _onError(dynamic error) {
-    print('❌ AudioPitchHelper error: $error');
+    print('❌ Audio capture error: $error');
   }
 
   void _onAudioData(dynamic obj) {
@@ -141,10 +143,6 @@ class AudioPitchHelper {
     _audioDataCallCount++;
 
     if (obj is Float32List) {
-      if (_audioDataCallCount == 1) {
-        print('📊 Received Float32List with ${obj.length} samples');
-      }
-
       final samples = obj.map((v) => v.toDouble()).toList();
       _sendToIsolate(samples);
     }
@@ -152,7 +150,6 @@ class AudioPitchHelper {
 
   Future<void> _sendToIsolate(List<double> samples) async {
     if (_isolateSendPort == null) return;
-
     final responsePort = ReceivePort();
     _isolateSendPort!.send([
       samples,
@@ -160,11 +157,8 @@ class AudioPitchHelper {
       bufferSize,
       responsePort.sendPort,
     ]);
-
     final result = await responsePort.first;
-    if (result is PitchDetectorResult) {
-      _handleResult(result);
-    }
+    if (result is PitchDetectorResult) _handleResult(result);
   }
 
   void _handleResult(PitchDetectorResult result) {
@@ -178,16 +172,34 @@ class AudioPitchHelper {
         pitch != null &&
         pitch > 0) {
       _validPitchCount++;
-      print(
-        '✅ Valid pitch detected: ${pitch.toStringAsFixed(2)} Hz (prob: ${prob.toStringAsFixed(2)})',
-      );
-      onFrequencyDetected(pitch);
+
+      // --- Smooth pitch ---
+      if (_smoothedPitch == 0.0) {
+        _smoothedPitch = pitch;
+      } else {
+        _smoothedPitch =
+            _smoothingFactor * pitch + (1 - _smoothingFactor) * _smoothedPitch;
+      }
+
+      // --- Stability check ---
+      if ((_lastStablePitch - _smoothedPitch).abs() < 2) {
+        _stabilityCounter++;
+      } else {
+        _stabilityCounter = 0;
+      }
+
+      if (_stabilityCounter >= _requiredStableFrames) {
+        onFrequencyDetected(_smoothedPitch);
+        _stabilityCounter = 0;
+      }
+
+      _lastStablePitch = _smoothedPitch;
     }
   }
 
   void dispose() {
     if (_isolate != null) {
-      print('🧹 Killing pitch detection isolate...');
+      print('🧹 Disposing pitch detection isolate...');
       _isolate!.kill(priority: Isolate.immediate);
       _isolate = null;
       _isolateSendPort = null;
@@ -198,5 +210,28 @@ class AudioPitchHelper {
   static double centsDifference(double detected, double target) {
     if (detected <= 0 || target <= 0) return 0;
     return 1200 * (log(detected / target) / ln2);
+  }
+
+  /// Snap a frequency to the closest guitar note (EADGBE).
+  static const _noteFrequencies = {
+    'E2': 82.41,
+    'A2': 110.00,
+    'D3': 146.83,
+    'G3': 196.00,
+    'B3': 246.94,
+    'E4': 329.63,
+  };
+
+  static String nearestNoteName(double freq) {
+    String nearest = '';
+    double minDiff = double.infinity;
+    _noteFrequencies.forEach((note, f) {
+      final diff = (freq - f).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = note;
+      }
+    });
+    return nearest;
   }
 }
