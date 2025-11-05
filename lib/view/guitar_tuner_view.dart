@@ -20,13 +20,24 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     TuningMode(name: 'Open G', description: 'D-G-D-G-B-D'),
   ];
 
+  // FIXED: Strings now ordered from low to high (6th to 1st string)
   final List<GuitarString> _guitarStrings = [
-    GuitarString(name: 'E', note: 'E', frequency: 329.63),
-    GuitarString(name: 'B', note: 'B', frequency: 246.94),
-    GuitarString(name: 'G', note: 'G', frequency: 196.00),
-    GuitarString(name: 'D', note: 'D', frequency: 146.83),
-    GuitarString(name: 'A', note: 'A', frequency: 110.00),
-    GuitarString(name: 'E', note: 'E', frequency: 82.41),
+    GuitarString(
+      name: 'E',
+      note: 'E',
+      frequency: 82.41,
+      stringNumber: 6,
+    ), // Low E
+    GuitarString(name: 'A', note: 'A', frequency: 110.00, stringNumber: 5),
+    GuitarString(name: 'D', note: 'D', frequency: 146.83, stringNumber: 4),
+    GuitarString(name: 'G', note: 'G', frequency: 196.00, stringNumber: 3),
+    GuitarString(name: 'B', note: 'B', frequency: 246.94, stringNumber: 2),
+    GuitarString(
+      name: 'E',
+      note: 'E',
+      frequency: 329.63,
+      stringNumber: 1,
+    ), // High E
   ];
 
   int _selectedStringIndex = 0;
@@ -48,7 +59,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   @override
   void dispose() {
     _audioHelper.stop();
-    _audioHelper.dispose(); // <-- add this line
+    _audioHelper.dispose();
     super.dispose();
   }
 
@@ -86,12 +97,12 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   }
 
   double _getNeedleValue() {
-    if (!_isTuning) return 0;
+    if (!_isTuning || _currentFrequency <= 0) return 0;
     final target = _guitarStrings[_selectedStringIndex].frequency;
     return AudioPitchHelper.centsDifference(
       _currentFrequency,
       target,
-    ).clamp(-50, 50);
+    ).clamp(-50.0, 50.0);
   }
 
   String _getTuningStatus() {
@@ -148,6 +159,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
         child: Column(
           children: [
             _buildTuningHeader(),
+            _buildFrequencyDisplay(), // NEW: Shows current frequency
             Expanded(child: _buildRadialGauge()),
             _buildStringSelector(),
             _buildTuningButton(),
@@ -190,8 +202,11 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8A2387), Color(0xFFF27121)],
+              gradient: LinearGradient(
+                colors: [
+                  _getTuningStatusColor(),
+                  _getTuningStatusColor().withOpacity(0.7),
+                ],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -203,6 +218,82 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                 fontSize: 12,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NEW: Display current and target frequency
+  Widget _buildFrequencyDisplay() {
+    if (!_isTuning) return const SizedBox.shrink();
+
+    final target = _guitarStrings[_selectedStringIndex].frequency;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
+        ),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Column(
+            children: [
+              Text(
+                'Target',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+              Text(
+                '${target.toStringAsFixed(2)} Hz',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          Container(width: 1, height: 30, color: Colors.grey.shade700),
+          Column(
+            children: [
+              Text(
+                'Current',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+              Text(
+                _currentFrequency > 0
+                    ? '${_currentFrequency.toStringAsFixed(2)} Hz'
+                    : '-- Hz',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _getTuningStatusColor(),
+                ),
+              ),
+            ],
+          ),
+          Container(width: 1, height: 30, color: Colors.grey.shade700),
+          Column(
+            children: [
+              Text(
+                'Cents',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+              Text(
+                _currentFrequency > 0
+                    ? '${_getNeedleValue().toStringAsFixed(1)}'
+                    : '--',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _getTuningStatusColor(),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -279,6 +370,32 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                 ),
               ),
             ],
+            annotations: <GaugeAnnotation>[
+              GaugeAnnotation(
+                widget: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _guitarStrings[_selectedStringIndex].name,
+                      style: const TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'String ${_guitarStrings[_selectedStringIndex].stringNumber}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+                angle: 90,
+                positionFactor: 0.5,
+              ),
+            ],
           ),
         ],
       ),
@@ -307,7 +424,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 70,
+            height: 80,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: List.generate(_guitarStrings.length, (i) {
@@ -315,7 +432,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                 final selected = i == _selectedStringIndex;
                 return Container(
                   margin: const EdgeInsets.only(right: 12),
-                  width: 60,
+                  width: 70,
                   decoration: BoxDecoration(
                     gradient: selected
                         ? const LinearGradient(
@@ -347,17 +464,24 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                           Text(
                             s.name,
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: selected ? Colors.white : Colors.white70,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
+                          Text(
+                            'String ${s.stringNumber}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: selected ? Colors.white70 : Colors.white60,
+                            ),
+                          ),
                           Text(
                             '${s.frequency.toStringAsFixed(0)}Hz',
                             style: TextStyle(
-                              fontSize: 10,
-                              color: selected ? Colors.white : Colors.white60,
+                              fontSize: 9,
+                              color: selected ? Colors.white60 : Colors.white70,
                             ),
                           ),
                         ],
@@ -426,11 +550,13 @@ class GuitarString {
   final String name;
   final String note;
   final double frequency;
+  final int stringNumber;
 
   GuitarString({
     required this.name,
     required this.note,
     required this.frequency,
+    required this.stringNumber,
   });
 }
 

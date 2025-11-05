@@ -6,12 +6,14 @@ import 'package:flutter_audio_capture/flutter_audio_capture.dart';
 import 'package:pitch_detector_dart/pitch_detector.dart';
 import 'package:pitch_detector_dart/pitch_detector_result.dart';
 
-/// --- Isolate entry function ---
+// --- Isolate entry function ---
 void pitchDetectionIsolate(SendPort mainSendPort) {
   final receivePort = ReceivePort();
   mainSendPort.send(receivePort.sendPort);
 
-  late PitchDetector detector;
+  PitchDetector? detector;
+  int? currentSampleRate;
+  int? currentBufferSize;
 
   receivePort.listen((message) async {
     try {
@@ -20,12 +22,19 @@ void pitchDetectionIsolate(SendPort mainSendPort) {
       final bufferSize = message[2] as int;
       final SendPort replyPort = message[3] as SendPort;
 
-      detector = PitchDetector(
-        audioSampleRate: sampleRate.toDouble(),
-        bufferSize: bufferSize,
-      );
+      // Only create detector if parameters changed or first time
+      if (detector == null ||
+          currentSampleRate != sampleRate ||
+          currentBufferSize != bufferSize) {
+        detector = PitchDetector(
+          audioSampleRate: sampleRate.toDouble(),
+          bufferSize: bufferSize,
+        );
+        currentSampleRate = sampleRate;
+        currentBufferSize = bufferSize;
+      }
 
-      final result = await detector.getPitchFromFloatBuffer(samples);
+      final result = await detector!.getPitchFromFloatBuffer(samples);
       replyPort.send(result);
     } catch (e) {
       print('❌ Isolate error: $e');
@@ -48,36 +57,29 @@ class AudioPitchHelper {
   bool _isInitialized = false;
   int _audioDataCallCount = 0;
   int _validPitchCount = 0;
+  bool _isProcessing = false;
 
-  // --- Smoothing & Stability ---
-  double _smoothedPitch = 0.0;
-  double _lastStablePitch = 0.0;
-  int _stabilityCounter = 0;
-  final double _smoothingFactor = 0.25; // Lower = smoother, higher = quicker
-  final int _requiredStableFrames = 4;
+  // Pitch smoothing
+  final List<double> _recentPitches = [];
+  static const int _smoothingWindowSize = 5;
 
   // --- Isolate communication ports ---
   Isolate? _isolate;
   SendPort? _isolateSendPort;
-  final _receivePort = ReceivePort();
 
   AudioPitchHelper({
     required this.onFrequencyDetected,
     this.sampleRate = 44100,
-    this.bufferSize = 4096, // ✅ more stable for low notes
-    this.detectionThreshold = 0.7,
-  }) {
-    print('🎵 AudioPitchHelper initialized:');
-    print('   • Sample Rate: $sampleRate Hz');
-    print('   • Buffer Size: $bufferSize');
-    print('   • Threshold: $detectionThreshold');
-  }
+    this.bufferSize = 2048,
+    this.detectionThreshold = 0.8,
+  });
 
   bool get isRunning => _isRunning;
 
   Future<void> _initIsolate() async {
     if (_isolateSendPort != null) return;
-    print('🚀 Starting pitch detection isolate...');
+
+    print('🚀 Spawning pitch detection isolate...');
     final readyPort = ReceivePort();
     _isolate = await Isolate.spawn(pitchDetectionIsolate, readyPort.sendPort);
     _isolateSendPort = await readyPort.first as SendPort;
@@ -86,7 +88,7 @@ class AudioPitchHelper {
 
   Future<void> start() async {
     if (_isRunning) {
-      print('⚠️ Already running');
+      print('⚠️ AudioPitchHelper already running');
       return;
     }
 
@@ -94,6 +96,7 @@ class AudioPitchHelper {
 
     _audioDataCallCount = 0;
     _validPitchCount = 0;
+    _isProcessing = false;
 
     try {
       if (!_isInitialized) {
@@ -102,63 +105,99 @@ class AudioPitchHelper {
         _isInitialized = true;
       }
 
-      print('🎤 Starting audio capture...');
-      await _audioCapture.start(
-        _onAudioData,
-        _onError,
-        sampleRate: sampleRate,
-        bufferSize: bufferSize,
-      );
+      print('🎙️ Starting audio capture...');
+      await _audioCapture.start(listener, (error) {
+        print('❌ Audio capture error: $error');
+      }, sampleRate: sampleRate);
       _isRunning = true;
-      print('✅ Audio capture started');
     } catch (e) {
-      print('❌ Start error: $e');
-      _isRunning = false;
-      _isInitialized = false;
+      print('❌ Error starting audio capture: $e');
     }
   }
 
-  Future<void> stop() async {
-    if (!_isRunning) return;
-    try {
-      print('🛑 Stopping audio capture...');
-      await _audioCapture.stop();
-      print('✅ Audio stopped');
-      print(
-        '📊 Stats: $_audioDataCallCount calls, $_validPitchCount valid pitches',
-      );
-    } catch (e) {
-      print('❌ Stop error: $e');
-    } finally {
-      _isRunning = false;
-    }
-  }
+  void listener(dynamic obj) {
+    if (!_isRunning || _isProcessing) return;
 
-  void _onError(dynamic error) {
-    print('❌ Audio capture error: $error');
-  }
-
-  void _onAudioData(dynamic obj) {
-    if (!_isRunning) return;
     _audioDataCallCount++;
-
-    if (obj is Float32List) {
-      final samples = obj.map((v) => v.toDouble()).toList();
-      _sendToIsolate(samples);
+    if (_audioDataCallCount % 50 == 0) {
+      print('📡 Audio data callback #$_audioDataCallCount');
     }
+
+    // Don't await - process asynchronously to avoid blocking
+    _processAudioData(obj);
+  }
+
+  Future<void> _processAudioData(dynamic obj) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      if (obj is Float32List) {
+        if (_audioDataCallCount == 1) {
+          print('📊 Received Float32List with ${obj.length} samples');
+        }
+
+        final samples = obj.map((v) => v.toDouble()).toList();
+
+        // Check if audio is loud enough (RMS amplitude check)
+        final rms = _calculateRMS(samples);
+        if (rms < 0.01) {
+          // Ignore very quiet sounds
+          if (_audioDataCallCount <= 5) {
+            print('🔇 Audio too quiet, RMS: ${rms.toStringAsFixed(4)}');
+          }
+          return;
+        }
+
+        await _sendToIsolate(samples);
+      } else {
+        print('⚠️ Unknown audio data type: ${obj.runtimeType}');
+      }
+    } catch (e) {
+      if (_audioDataCallCount <= 5) {
+        print('❌ AudioPitchHelper process error: $e');
+      }
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  double _calculateRMS(List<double> samples) {
+    if (samples.isEmpty) return 0;
+    double sum = 0;
+    for (var sample in samples) {
+      sum += sample * sample;
+    }
+    return sqrt(sum / samples.length);
   }
 
   Future<void> _sendToIsolate(List<double> samples) async {
     if (_isolateSendPort == null) return;
+
     final responsePort = ReceivePort();
-    _isolateSendPort!.send([
-      samples,
-      sampleRate,
-      bufferSize,
-      responsePort.sendPort,
-    ]);
-    final result = await responsePort.first;
-    if (result is PitchDetectorResult) _handleResult(result);
+
+    try {
+      _isolateSendPort!.send([
+        samples,
+        sampleRate,
+        bufferSize,
+        responsePort.sendPort,
+      ]);
+
+      // Add timeout to prevent hanging
+      final result = await responsePort.first.timeout(
+        const Duration(milliseconds: 200),
+        onTimeout: () => null,
+      );
+
+      if (result is PitchDetectorResult) {
+        _handleResult(result);
+      }
+    } catch (e) {
+      print('❌ Error sending to isolate: $e');
+    } finally {
+      responsePort.close();
+    }
   }
 
   void _handleResult(PitchDetectorResult result) {
@@ -166,72 +205,68 @@ class AudioPitchHelper {
     final prob = result.probability;
     final pitched = result.pitched;
 
+    // Always log first 20 results to see what's happening
+    if (_audioDataCallCount <= 20) {
+      print(
+        '🎵 Result #$_audioDataCallCount: pitched=$pitched, prob=${prob?.toStringAsFixed(2)}, pitch=${pitch?.toStringAsFixed(2)} Hz',
+      );
+    }
+
     if (pitched == true &&
         prob != null &&
         prob > detectionThreshold &&
         pitch != null &&
-        pitch > 0) {
-      _validPitchCount++;
+        pitch > 0 &&
+        pitch >= 70 &&
+        pitch <= 400) {
+      // Filter to guitar frequency range
 
-      // --- Smooth pitch ---
-      if (_smoothedPitch == 0.0) {
-        _smoothedPitch = pitch;
-      } else {
-        _smoothedPitch =
-            _smoothingFactor * pitch + (1 - _smoothingFactor) * _smoothedPitch;
+      // Add to smoothing window
+      _recentPitches.add(pitch);
+      if (_recentPitches.length > _smoothingWindowSize) {
+        _recentPitches.removeAt(0);
       }
 
-      // --- Stability check ---
-      if ((_lastStablePitch - _smoothedPitch).abs() < 2) {
-        _stabilityCounter++;
-      } else {
-        _stabilityCounter = 0;
-      }
+      // Calculate median for stability (better than average for outliers)
+      if (_recentPitches.length >= 3) {
+        final sorted = List<double>.from(_recentPitches)..sort();
+        final median = sorted[sorted.length ~/ 2];
 
-      if (_stabilityCounter >= _requiredStableFrames) {
-        onFrequencyDetected(_smoothedPitch);
-        _stabilityCounter = 0;
+        _validPitchCount++;
+        if (_validPitchCount % 10 == 0) {
+          print(
+            '✅ Valid pitch detected: ${median.toStringAsFixed(2)} Hz (prob: ${prob.toStringAsFixed(2)})',
+          );
+        }
+        onFrequencyDetected(median);
       }
-
-      _lastStablePitch = _smoothedPitch;
     }
   }
 
+  Future<void> stop() async {
+    if (!_isRunning) return;
+    print('🛑 Stopping audio capture...');
+    _isRunning = false;
+    await _audioCapture.stop();
+  }
+
   void dispose() {
+    stop();
     if (_isolate != null) {
-      print('🧹 Disposing pitch detection isolate...');
+      print('🧹 Killing pitch detection isolate...');
       _isolate!.kill(priority: Isolate.immediate);
       _isolate = null;
       _isolateSendPort = null;
     }
   }
 
-  /// Returns cent difference between detected and target frequency.
-  static double centsDifference(double detected, double target) {
-    if (detected <= 0 || target <= 0) return 0;
-    return 1200 * (log(detected / target) / ln2);
-  }
-
-  /// Snap a frequency to the closest guitar note (EADGBE).
-  static const _noteFrequencies = {
-    'E2': 82.41,
-    'A2': 110.00,
-    'D3': 146.83,
-    'G3': 196.00,
-    'B3': 246.94,
-    'E4': 329.63,
-  };
-
-  static String nearestNoteName(double freq) {
-    String nearest = '';
-    double minDiff = double.infinity;
-    _noteFrequencies.forEach((note, f) {
-      final diff = (freq - f).abs();
-      if (diff < minDiff) {
-        minDiff = diff;
-        nearest = note;
-      }
-    });
-    return nearest;
+  /// Calculate the difference in cents between current and target frequency
+  /// Cents = 1200 * log2(f1/f2)
+  static double centsDifference(
+    double currentFrequency,
+    double targetFrequency,
+  ) {
+    if (currentFrequency <= 0 || targetFrequency <= 0) return 0;
+    return 1200 * (log(currentFrequency / targetFrequency) / ln2);
   }
 }
