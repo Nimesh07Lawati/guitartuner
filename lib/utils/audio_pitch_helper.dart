@@ -59,9 +59,14 @@ class AudioPitchHelper {
   int _validPitchCount = 0;
   bool _isProcessing = false;
 
-  // Pitch smoothing
-  final List<double> _recentPitches = [];
-  static const int _smoothingWindowSize = 5;
+  // Improved pitch smoothing
+  final List<double> _pitchBuffer = [];
+  static const int _bufferSize = 5; // Number of readings to average
+  static const double _confidenceThreshold = 0.7; // Higher confidence threshold
+
+  // Frequency validation
+  static const double _minValidFrequency = 65.0; // Lowered for bass strings
+  static const double _maxValidFrequency = 450.0; // For high E string harmonics
 
   // --- Isolate communication ports ---
   Isolate? _isolate;
@@ -71,7 +76,7 @@ class AudioPitchHelper {
     required this.onFrequencyDetected,
     this.sampleRate = 44100,
     this.bufferSize = 2048,
-    this.detectionThreshold = 0.8,
+    this.detectionThreshold = 0.7, // Higher threshold for more accuracy
   });
 
   bool get isRunning => _isRunning;
@@ -97,6 +102,7 @@ class AudioPitchHelper {
     _audioDataCallCount = 0;
     _validPitchCount = 0;
     _isProcessing = false;
+    _pitchBuffer.clear();
 
     try {
       if (!_isInitialized) {
@@ -119,9 +125,6 @@ class AudioPitchHelper {
     if (!_isRunning || _isProcessing) return;
 
     _audioDataCallCount++;
-    if (_audioDataCallCount % 50 == 0) {
-      print('📡 Audio data callback #$_audioDataCallCount');
-    }
 
     // Don't await - process asynchronously to avoid blocking
     _processAudioData(obj);
@@ -133,28 +136,19 @@ class AudioPitchHelper {
 
     try {
       if (obj is Float32List) {
-        if (_audioDataCallCount == 1) {
-          print('📊 Received Float32List with ${obj.length} samples');
-        }
-
         final samples = obj.map((v) => v.toDouble()).toList();
 
-        // Check if audio is loud enough (RMS amplitude check)
+        // Improved RMS calculation with better threshold
         final rms = _calculateRMS(samples);
         if (rms < 0.01) {
-          // Ignore very quiet sounds
-          if (_audioDataCallCount <= 5) {
-            print('🔇 Audio too quiet, RMS: ${rms.toStringAsFixed(4)}');
-          }
+          // Adjusted threshold for better sensitivity
           return;
         }
 
         await _sendToIsolate(samples);
-      } else {
-        print('⚠️ Unknown audio data type: ${obj.runtimeType}');
       }
     } catch (e) {
-      if (_audioDataCallCount <= 5) {
+      if (_audioDataCallCount <= 10) {
         print('❌ AudioPitchHelper process error: $e');
       }
     } finally {
@@ -184,9 +178,10 @@ class AudioPitchHelper {
         responsePort.sendPort,
       ]);
 
-      // Add timeout to prevent hanging
       final result = await responsePort.first.timeout(
-        const Duration(milliseconds: 200),
+        const Duration(
+          milliseconds: 150,
+        ), // Reduced timeout for faster response
         onTimeout: () => null,
       );
 
@@ -194,7 +189,7 @@ class AudioPitchHelper {
         _handleResult(result);
       }
     } catch (e) {
-      print('❌ Error sending to isolate: $e');
+      // Silently handle timeout errors
     } finally {
       responsePort.close();
     }
@@ -205,41 +200,54 @@ class AudioPitchHelper {
     final prob = result.probability;
     final pitched = result.pitched;
 
-    // Always log first 20 results to see what's happening
-    if (_audioDataCallCount <= 20) {
-      print(
-        '🎵 Result #$_audioDataCallCount: pitched=$pitched, prob=${prob?.toStringAsFixed(2)}, pitch=${pitch?.toStringAsFixed(2)} Hz',
-      );
-    }
-
+    // Improved validation with guitar-specific frequency range
     if (pitched == true &&
         prob != null &&
-        prob > detectionThreshold &&
+        prob > _confidenceThreshold && // Use higher confidence
         pitch != null &&
-        pitch > 0 &&
-        pitch >= 70 &&
-        pitch <= 400) {
-      // Filter to guitar frequency range
+        pitch >= _minValidFrequency &&
+        pitch <= _maxValidFrequency) {
+      // Add to buffer for smoothing
+      _pitchBuffer.add(pitch);
 
-      // Add to smoothing window
-      _recentPitches.add(pitch);
-      if (_recentPitches.length > _smoothingWindowSize) {
-        _recentPitches.removeAt(0);
+      // Keep buffer at fixed size
+      if (_pitchBuffer.length > _bufferSize) {
+        _pitchBuffer.removeAt(0);
       }
 
-      // Calculate median for stability (better than average for outliers)
-      if (_recentPitches.length >= 3) {
-        final sorted = List<double>.from(_recentPitches)..sort();
-        final median = sorted[sorted.length ~/ 2];
+      // Calculate median for more stable reading (better than average for pitch)
+      final smoothedPitch = _calculateMedian(_pitchBuffer);
 
-        _validPitchCount++;
-        if (_validPitchCount % 10 == 0) {
-          print(
-            '✅ Valid pitch detected: ${median.toStringAsFixed(2)} Hz (prob: ${prob.toStringAsFixed(2)})',
-          );
-        }
-        onFrequencyDetected(median);
+      _validPitchCount++;
+
+      if (_validPitchCount % 15 == 0) {
+        print(
+          '✅ Pitch: ${smoothedPitch.toStringAsFixed(2)} Hz | Confidence: ${prob.toStringAsFixed(2)} | Buffer: ${_pitchBuffer.length}',
+        );
       }
+
+      // Send smoothed pitch for display
+      onFrequencyDetected(smoothedPitch);
+    } else if (_pitchBuffer.isNotEmpty) {
+      // If no valid pitch but we have previous data, gradually clear buffer
+      if (_pitchBuffer.length > 1) {
+        _pitchBuffer.removeAt(0);
+        final smoothedPitch = _calculateMedian(_pitchBuffer);
+        onFrequencyDetected(smoothedPitch);
+      }
+    }
+  }
+
+  double _calculateMedian(List<double> values) {
+    if (values.isEmpty) return 0.0;
+
+    final sorted = List<double>.from(values)..sort();
+    final middle = sorted.length ~/ 2;
+
+    if (sorted.length % 2 == 1) {
+      return sorted[middle];
+    } else {
+      return (sorted[middle - 1] + sorted[middle]) / 2.0;
     }
   }
 
@@ -247,6 +255,7 @@ class AudioPitchHelper {
     if (!_isRunning) return;
     print('🛑 Stopping audio capture...');
     _isRunning = false;
+    _pitchBuffer.clear();
     await _audioCapture.stop();
   }
 
@@ -268,5 +277,26 @@ class AudioPitchHelper {
   ) {
     if (currentFrequency <= 0 || targetFrequency <= 0) return 0;
     return 1200 * (log(currentFrequency / targetFrequency) / ln2);
+  }
+
+  /// Find the closest guitar string frequency to the detected pitch
+  static double findClosestFrequency(
+    double currentFrequency,
+    List<double> targetFrequencies,
+  ) {
+    if (targetFrequencies.isEmpty) return 0;
+
+    double closestFreq = targetFrequencies[0];
+    double minDiff = (currentFrequency - closestFreq).abs();
+
+    for (var freq in targetFrequencies) {
+      final diff = (currentFrequency - freq).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestFreq = freq;
+      }
+    }
+
+    return closestFreq;
   }
 }
