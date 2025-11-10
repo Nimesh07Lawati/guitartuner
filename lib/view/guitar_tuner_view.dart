@@ -20,39 +20,33 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     TuningMode(name: 'Open G', description: 'D-G-D-G-B-D'),
   ];
 
-  // FIXED: Strings now ordered from low to high (6th to 1st string)
   final List<GuitarString> _guitarStrings = [
-    GuitarString(
-      name: 'E',
-      note: 'E',
-      frequency: 82.41,
-      stringNumber: 6,
-    ), // Low E
+    GuitarString(name: 'E', note: 'E', frequency: 82.41, stringNumber: 6),
     GuitarString(name: 'A', note: 'A', frequency: 110.00, stringNumber: 5),
     GuitarString(name: 'D', note: 'D', frequency: 146.83, stringNumber: 4),
     GuitarString(name: 'G', note: 'G', frequency: 196.00, stringNumber: 3),
     GuitarString(name: 'B', note: 'B', frequency: 246.94, stringNumber: 2),
-    GuitarString(
-      name: 'E',
-      note: 'E',
-      frequency: 329.63,
-      stringNumber: 1,
-    ), // High E
+    GuitarString(name: 'E', note: 'E', frequency: 329.63, stringNumber: 1),
   ];
 
   int _selectedStringIndex = 0;
   final int _selectedTuningModeIndex = 0;
   double _currentFrequency = 0.0;
   bool _isTuning = false;
+  int? _autoDetectedStringIndex;
 
   @override
   void initState() {
     super.initState();
     _audioHelper = AudioPitchHelper(
       onFrequencyDetected: (freq) {
-        setState(() => _currentFrequency = freq);
+        setState(() {
+          _currentFrequency = freq;
+          // Auto-detect closest string
+          _autoDetectString(freq);
+        });
       },
-      detectionThreshold: 0.5,
+      detectionThreshold: 0.7, // Increased for better accuracy
     );
   }
 
@@ -61,6 +55,24 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     _audioHelper.stop();
     _audioHelper.dispose();
     super.dispose();
+  }
+
+  // Auto-detect which string is being played
+  void _autoDetectString(double frequency) {
+    if (frequency <= 0) return;
+
+    final frequencies = _guitarStrings.map((s) => s.frequency).toList();
+    final closestFreq = AudioPitchHelper.findClosestFrequency(
+      frequency,
+      frequencies,
+    );
+
+    final index = _guitarStrings.indexWhere((s) => s.frequency == closestFreq);
+    if (index != -1 && index != _autoDetectedStringIndex) {
+      setState(() {
+        _autoDetectedStringIndex = index;
+      });
+    }
   }
 
   // ------------------ Tuning Logic ------------------
@@ -93,16 +105,29 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     setState(() {
       _isTuning = false;
       _currentFrequency = 0.0;
+      _autoDetectedStringIndex = null;
     });
   }
 
   double _getNeedleValue() {
     if (!_isTuning || _currentFrequency <= 0) return 0;
-    final target = _guitarStrings[_selectedStringIndex].frequency;
-    return AudioPitchHelper.centsDifference(
-      _currentFrequency,
-      target,
-    ).clamp(-50.0, 50.0);
+
+    // Use auto-detected string if available, otherwise use selected string
+    final targetIndex = _autoDetectedStringIndex ?? _selectedStringIndex;
+    final target = _guitarStrings[targetIndex].frequency;
+
+    // Calculate cents difference
+    final cents = AudioPitchHelper.centsDifference(_currentFrequency, target);
+
+    // Apply slight smoothing to needle movement
+    final clampedCents = cents.clamp(-50.0, 50.0);
+
+    // For very small differences, snap to center for "perfect" tuning
+    if (clampedCents.abs() < 1.0) {
+      return 0.0;
+    }
+
+    return clampedCents;
   }
 
   String _getTuningStatus() {
@@ -110,19 +135,25 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     if (_currentFrequency <= 0) return 'Listening...';
 
     final cents = _getNeedleValue().abs();
-    if (cents < 5) return 'Perfect!';
-    if (cents < 15) return 'Very Close';
-    if (_currentFrequency < _guitarStrings[_selectedStringIndex].frequency) {
-      return 'Too Low';
+    if (cents < 2) return 'Perfect! 🎯';
+    if (cents < 8) return 'Very Close';
+    if (cents < 15) return 'Almost There';
+
+    final targetIndex = _autoDetectedStringIndex ?? _selectedStringIndex;
+    final target = _guitarStrings[targetIndex].frequency;
+
+    if (_currentFrequency < target) {
+      return 'Too Low ↓';
     }
-    return 'Too High';
+    return 'Too High ↑';
   }
 
   Color _getTuningStatusColor() {
     if (!_isTuning) return Colors.grey;
     if (_currentFrequency <= 0) return Colors.orange;
     final cents = _getNeedleValue().abs();
-    if (cents < 5) return Colors.green;
+    if (cents < 2) return Colors.green;
+    if (cents < 8) return Colors.lightGreen;
     if (cents < 15) return Colors.orange;
     return Colors.red;
   }
@@ -130,7 +161,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   void _selectString(int index) {
     setState(() {
       _selectedStringIndex = index;
-      _currentFrequency = 0.0;
+      _autoDetectedStringIndex = null; // Clear auto-detection
     });
   }
 
@@ -159,7 +190,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
         child: Column(
           children: [
             _buildTuningHeader(),
-            _buildFrequencyDisplay(), // NEW: Shows current frequency
+            _buildFrequencyDisplay(),
             Expanded(child: _buildRadialGauge()),
             _buildStringSelector(),
             _buildTuningButton(),
@@ -224,11 +255,12 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
     );
   }
 
-  // NEW: Display current and target frequency
   Widget _buildFrequencyDisplay() {
     if (!_isTuning) return const SizedBox.shrink();
 
-    final target = _guitarStrings[_selectedStringIndex].frequency;
+    final targetIndex = _autoDetectedStringIndex ?? _selectedStringIndex;
+    final target = _guitarStrings[targetIndex].frequency;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       padding: const EdgeInsets.all(12),
@@ -237,61 +269,87 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
           colors: [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
         ),
         borderRadius: BorderRadius.circular(15),
+        border: _autoDetectedStringIndex != null
+            ? Border.all(color: Colors.orange.withOpacity(0.5), width: 2)
+            : null,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          Column(
+          if (_autoDetectedStringIndex != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.orange, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Auto-detected: ${_guitarStrings[_autoDetectedStringIndex!].name} (String ${_guitarStrings[_autoDetectedStringIndex!].stringNumber})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Text(
-                'Target',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              Column(
+                children: [
+                  Text(
+                    'Target',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                  ),
+                  Text(
+                    '${target.toStringAsFixed(2)} Hz',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                '${target.toStringAsFixed(2)} Hz',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+              Container(width: 1, height: 30, color: Colors.grey.shade700),
+              Column(
+                children: [
+                  Text(
+                    'Current',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                  ),
+                  Text(
+                    _currentFrequency > 0
+                        ? '${_currentFrequency.toStringAsFixed(2)} Hz'
+                        : '-- Hz',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _getTuningStatusColor(),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          Container(width: 1, height: 30, color: Colors.grey.shade700),
-          Column(
-            children: [
-              Text(
-                'Current',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
-              ),
-              Text(
-                _currentFrequency > 0
-                    ? '${_currentFrequency.toStringAsFixed(2)} Hz'
-                    : '-- Hz',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getTuningStatusColor(),
-                ),
-              ),
-            ],
-          ),
-          Container(width: 1, height: 30, color: Colors.grey.shade700),
-          Column(
-            children: [
-              Text(
-                'Cents',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
-              ),
-              Text(
-                _currentFrequency > 0
-                    ? '${_getNeedleValue().toStringAsFixed(1)}'
-                    : '--',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getTuningStatusColor(),
-                ),
+              Container(width: 1, height: 30, color: Colors.grey.shade700),
+              Column(
+                children: [
+                  Text(
+                    'Cents',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                  ),
+                  Text(
+                    _currentFrequency > 0
+                        ? '${_getNeedleValue().toStringAsFixed(1)}'
+                        : '--',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _getTuningStatusColor(),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -301,6 +359,9 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   }
 
   Widget _buildRadialGauge() {
+    final targetIndex = _autoDetectedStringIndex ?? _selectedStringIndex;
+    final currentString = _guitarStrings[targetIndex];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       constraints: const BoxConstraints(maxHeight: 300),
@@ -310,10 +371,13 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
             minimum: -50,
             maximum: 50,
             showAxisLine: false,
-            showTicks: false,
+            showTicks: true,
+            ticksPosition: ElementsPosition.outside,
+            minorTicksPerInterval: 4,
             showLabels: true,
+            labelOffset: 15,
             axisLabelStyle: const GaugeTextStyle(
-              fontSize: 12,
+              fontSize: 10,
               color: Colors.white70,
             ),
             ranges: <GaugeRange>[
@@ -326,20 +390,34 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
               ),
               GaugeRange(
                 startValue: -15,
-                endValue: -5,
+                endValue: -8,
                 color: const Color(0xFFF27121),
                 startWidth: 18,
                 endWidth: 18,
               ),
               GaugeRange(
-                startValue: -5,
-                endValue: 5,
-                color: Colors.green,
-                startWidth: 22,
-                endWidth: 22,
+                startValue: -8,
+                endValue: -2,
+                color: Colors.lightGreen,
+                startWidth: 20,
+                endWidth: 20,
               ),
               GaugeRange(
-                startValue: 5,
+                startValue: -2,
+                endValue: 2,
+                color: Colors.green,
+                startWidth: 24,
+                endWidth: 24,
+              ),
+              GaugeRange(
+                startValue: 2,
+                endValue: 8,
+                color: Colors.lightGreen,
+                startWidth: 20,
+                endWidth: 20,
+              ),
+              GaugeRange(
+                startValue: 8,
                 endValue: 15,
                 color: const Color(0xFFF27121),
                 startWidth: 18,
@@ -357,15 +435,18 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
               NeedlePointer(
                 value: _getNeedleValue(),
                 enableAnimation: true,
-                animationDuration: 100,
+                animationDuration: 100, // Faster animation for better response
+                animationType: AnimationType.ease,
                 needleColor: Colors.white,
-                needleLength: 0.6,
+                needleLength: 0.65,
                 lengthUnit: GaugeSizeUnit.factor,
-                needleStartWidth: 1,
-                needleEndWidth: 4,
+                needleStartWidth: 1.5,
+                needleEndWidth: 5,
                 knobStyle: const KnobStyle(
-                  knobRadius: 0.08,
+                  knobRadius: 0.09,
                   color: Color(0xFFF27121),
+                  borderColor: Colors.white,
+                  borderWidth: 0.02,
                   sizeUnit: GaugeSizeUnit.factor,
                 ),
               ),
@@ -376,20 +457,33 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _guitarStrings[_selectedStringIndex].name,
-                      style: const TextStyle(
-                        fontSize: 48,
+                      currentString.name,
+                      style: TextStyle(
+                        fontSize: 52,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: _autoDetectedStringIndex != null
+                            ? Colors.orange
+                            : Colors.white,
                       ),
                     ),
                     Text(
-                      'String ${_guitarStrings[_selectedStringIndex].stringNumber}',
+                      'String ${currentString.stringNumber}',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade400,
                       ),
                     ),
+                    if (_isTuning && _currentFrequency > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_getNeedleValue().abs().toStringAsFixed(1)} cents',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _getTuningStatusColor(),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 angle: 90,
@@ -430,11 +524,17 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
               children: List.generate(_guitarStrings.length, (i) {
                 final s = _guitarStrings[i];
                 final selected = i == _selectedStringIndex;
+                final autoDetected = i == _autoDetectedStringIndex;
+
                 return Container(
                   margin: const EdgeInsets.only(right: 12),
                   width: 70,
                   decoration: BoxDecoration(
-                    gradient: selected
+                    gradient: autoDetected
+                        ? const LinearGradient(
+                            colors: [Colors.orange, Colors.deepOrange],
+                          )
+                        : selected
                         ? const LinearGradient(
                             colors: [
                               Color(0xFF8A2387),
@@ -447,10 +547,12 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                           ),
                     borderRadius: BorderRadius.circular(15),
                     border: Border.all(
-                      color: selected
+                      color: autoDetected
+                          ? Colors.orange
+                          : selected
                           ? Colors.white
                           : Colors.white.withOpacity(0.2),
-                      width: selected ? 2 : 1,
+                      width: autoDetected || selected ? 2 : 1,
                     ),
                   ),
                   child: Material(
@@ -466,7 +568,9 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: selected ? Colors.white : Colors.white70,
+                              color: (selected || autoDetected)
+                                  ? Colors.white
+                                  : Colors.white70,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -474,14 +578,18 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                             'String ${s.stringNumber}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: selected ? Colors.white70 : Colors.white60,
+                              color: (selected || autoDetected)
+                                  ? Colors.white70
+                                  : Colors.white60,
                             ),
                           ),
                           Text(
                             '${s.frequency.toStringAsFixed(0)}Hz',
                             style: TextStyle(
                               fontSize: 9,
-                              color: selected ? Colors.white60 : Colors.white70,
+                              color: (selected || autoDetected)
+                                  ? Colors.white60
+                                  : Colors.white70,
                             ),
                           ),
                         ],
