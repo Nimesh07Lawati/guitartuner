@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:guitartuner/view/guitar_tuner_view.dart';
-import 'package:guitartuner/view/metronome_view.dart';
+import 'package:guitartuner/view/screens/guitar_tuner_view.dart';
+import 'package:guitartuner/view/screens/metronome_view.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:guitartuner/view/home_screen.dart';
+import 'package:guitartuner/view/screens/home_screen.dart';
 
 void main() {
   runApp(const MyApp());
