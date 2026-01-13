@@ -202,9 +202,7 @@ class AudioPitchHelper {
 
     // Improved validation with guitar-specific frequency range
     if (pitched == true &&
-        prob != null &&
-        prob > _confidenceThreshold && // Use higher confidence
-        pitch != null &&
+        prob > _confidenceThreshold &&
         pitch >= _minValidFrequency &&
         pitch <= _maxValidFrequency) {
       // Add to buffer for smoothing
