@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../models/guitar_string.dart';
+import '../../../../models/guitar_string.dart';
 import 'guitar_tuner_controller.dart';
-import '../widgets/guitar_tuner_page_widget/tuning_button.dart';
+import '../../widgets/guitar_tuner_page_widget/tuning_button.dart';
 
 class GuitarTunerScreen extends StatefulWidget {
   const GuitarTunerScreen({super.key});
