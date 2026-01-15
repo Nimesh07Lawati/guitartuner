@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../models/guitar_string.dart';
-import '../../../utils/audio_pitch_helper.dart';
+import '../../../../models/guitar_string.dart';
+import '../../../../utils/audio_pitch_helper.dart';
 
 class GuitarTunerController extends ChangeNotifier {
   late AudioPitchHelper audioHelper;
