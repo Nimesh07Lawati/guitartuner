@@ -12,7 +12,8 @@ class MetronomeController extends ChangeNotifier {
   late Ticker _ticker;
 
   Duration _beatInterval = Duration.zero;
-  Duration _elapsed = Duration.zero;
+  Duration _totalElapsed = Duration.zero;
+  int _nextBeatNumber = 0; // Which beat should fire next (0, 1, 2, ...)
 
   MetronomeController(TickerProvider vsync) {
     _ticker = vsync.createTicker(_onTick);
@@ -22,27 +23,38 @@ class MetronomeController extends ChangeNotifier {
 
   Future<void> _loadAudio() async {
     await _player.setSource(AssetSource('audio/tick.mp3'));
-    await _player.setReleaseMode(ReleaseMode.stop);
+    // CRITICAL: Use loop mode to keep audio engine ready
+    await _player.setReleaseMode(ReleaseMode.loop);
+    // Pre-load by seeking to start
+    await _player.seek(Duration.zero);
   }
 
   void _recalculateInterval() {
     _beatInterval = Duration(microseconds: (60000000 / bpm).round());
   }
 
-  void _onTick(Duration delta) {
+  void _onTick(Duration elapsed) {
     if (!isPlaying) return;
 
-    _elapsed += delta;
+    _totalElapsed = elapsed; // Absolute time from start
 
-    if (_elapsed >= _beatInterval) {
-      _elapsed -= _beatInterval;
+    // Calculate which beat we SHOULD be on based on absolute time
+    final expectedBeatTime = _beatInterval * _nextBeatNumber;
+
+    if (_totalElapsed >= expectedBeatTime) {
+      // Fire the beat
       _triggerBeat();
+      _nextBeatNumber++; // Move to next beat
     }
   }
 
   void _triggerBeat() {
     currentBeat = (currentBeat % timeSignature) + 1;
-    _player.resume(); // already preloaded → minimal latency
+
+    // CRITICAL: Restart from beginning for instant playback
+    _player.seek(Duration.zero);
+    _player.resume();
+
     notifyListeners();
   }
 
@@ -50,7 +62,8 @@ class MetronomeController extends ChangeNotifier {
     if (isPlaying) return;
     isPlaying = true;
     currentBeat = 0;
-    _elapsed = Duration.zero;
+    _nextBeatNumber = 0;
+    _totalElapsed = Duration.zero;
     _ticker.start();
     notifyListeners();
   }
@@ -58,7 +71,9 @@ class MetronomeController extends ChangeNotifier {
   void stop() {
     isPlaying = false;
     currentBeat = 0;
+    _nextBeatNumber = 0;
     _ticker.stop();
+    _player.pause();
     notifyListeners();
   }
 
