@@ -12,7 +12,6 @@ class MetronomeScreen extends StatefulWidget {
 
 class _MetronomeScreenState extends State<MetronomeScreen>
     with TickerProviderStateMixin {
-  // ✅ Changed from SingleTickerProviderStateMixin
   late MetronomeController controller;
 
   @override
