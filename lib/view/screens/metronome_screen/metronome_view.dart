@@ -11,13 +11,21 @@ class MetronomeScreen extends StatefulWidget {
 }
 
 class _MetronomeScreenState extends State<MetronomeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  // ✅ Changed from SingleTickerProviderStateMixin
   late MetronomeController controller;
 
   @override
   void initState() {
     super.initState();
     controller = MetronomeController(this);
+
+    // Add listener to debug state changes
+    controller.addListener(() {
+      debugPrint(
+        'Metronome State - Playing: ${controller.isPlaying}, Beat: ${controller.currentBeat}, BPM: ${controller.bpm}',
+      );
+    });
   }
 
   @override
@@ -119,7 +127,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                               }).toList(),
                               onChanged: (value) {
                                 if (value != null) {
-                                  controller.updateTimeSignature(value);
+                                  controller.setTimeSignature(value);
                                 }
                               },
                             ),
@@ -142,15 +150,22 @@ class _MetronomeScreenState extends State<MetronomeScreen>
 
                   const SizedBox(height: 10),
 
-                  // Play/Stop Button
+                  // Play/Stop Button with debug info
                   Container(
                     width: double.infinity,
                     height: 60,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     child: ElevatedButton(
-                      onPressed: controller.isPlaying
-                          ? controller.stop
-                          : controller.start,
+                      onPressed: () {
+                        debugPrint(
+                          'Button pressed - isPlaying: ${controller.isPlaying}',
+                        );
+                        if (controller.isPlaying) {
+                          controller.stop();
+                        } else {
+                          controller.start();
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: controller.isPlaying
                             ? const Color(0xFFE94057)
@@ -170,6 +185,13 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                         ),
                       ),
                     ),
+                  ),
+
+                  // Debug info (remove after testing)
+                  const SizedBox(height: 10),
+                  Text(
+                    'Debug: ${controller.isPlaying ? "Playing" : "Stopped"} - Beat ${controller.currentBeat}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
               ),
