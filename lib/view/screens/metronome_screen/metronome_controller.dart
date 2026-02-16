@@ -1,102 +1,81 @@
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/scheduler.dart';
+import 'dart:async';
 
 class MetronomeController extends ChangeNotifier {
-  int bpm = 120;
-  int timeSignature = 4;
-  int currentBeat = 0;
-  bool isPlaying = false;
+  Timer? _timer;
+  int _bpm = 120;
+  int _timeSignature = 4;
+  int _currentBeat = 0;
+  bool _isPlaying = false;
+  final TickerProvider vsync;
 
-  final AudioPlayer _player = AudioPlayer();
-  late Ticker _ticker;
+  MetronomeController(this.vsync);
 
-  Duration _beatInterval = Duration.zero;
-  Duration _totalElapsed = Duration.zero;
-  int _nextBeatNumber = 0; // Which beat should fire next (0, 1, 2, ...)
+  int get bpm => _bpm;
+  int get timeSignature => _timeSignature;
+  int get currentBeat => _currentBeat;
+  bool get isPlaying => _isPlaying;
 
-  MetronomeController(TickerProvider vsync) {
-    _ticker = vsync.createTicker(_onTick);
-    _loadAudio();
-    _recalculateInterval();
-  }
-
-  Future<void> _loadAudio() async {
-    await _player.setSource(AssetSource('audio/tick.mp3'));
-    // CRITICAL: Use loop mode to keep audio engine ready
-    await _player.setReleaseMode(ReleaseMode.loop);
-    // Pre-load by seeking to start
-    await _player.seek(Duration.zero);
-  }
-
-  void _recalculateInterval() {
-    _beatInterval = Duration(microseconds: (60000000 / bpm).round());
-  }
-
-  void _onTick(Duration elapsed) {
-    if (!isPlaying) return;
-
-    _totalElapsed = elapsed; // Absolute time from start
-
-    // Calculate which beat we SHOULD be on based on absolute time
-    final expectedBeatTime = _beatInterval * _nextBeatNumber;
-
-    if (_totalElapsed >= expectedBeatTime) {
-      // Fire the beat
-      _triggerBeat();
-      _nextBeatNumber++; // Move to next beat
+  void incrementBpm() {
+    if (_bpm < 240) {
+      _bpm += 1;
+      if (_isPlaying) {
+        restart();
+      }
+      notifyListeners();
     }
   }
 
-  void _triggerBeat() {
-    currentBeat = (currentBeat % timeSignature) + 1;
+  void decrementBpm() {
+    if (_bpm > 40) {
+      _bpm -= 1;
+      if (_isPlaying) {
+        restart();
+      }
+      notifyListeners();
+    }
+  }
 
-    // CRITICAL: Restart from beginning for instant playback
-    _player.seek(Duration.zero);
-    _player.resume();
-
+  void updateTimeSignature(int newSignature) {
+    _timeSignature = newSignature;
+    _currentBeat = 0;
+    if (_isPlaying) {
+      restart();
+    }
     notifyListeners();
   }
 
   void start() {
-    if (isPlaying) return;
-    isPlaying = true;
-    currentBeat = 0;
-    _nextBeatNumber = 0;
-    _totalElapsed = Duration.zero;
-    _ticker.start();
+    _isPlaying = true;
+    _currentBeat = 1;
+    startTimer();
     notifyListeners();
   }
 
   void stop() {
-    isPlaying = false;
-    currentBeat = 0;
-    _nextBeatNumber = 0;
-    _ticker.stop();
-    _player.pause();
+    _isPlaying = false;
+    _timer?.cancel();
+    _currentBeat = 0;
     notifyListeners();
   }
 
-  void incrementBpm() {
-    if (bpm < 240) bpm += 5;
-    _recalculateInterval();
-    notifyListeners();
+  void restart() {
+    stop();
+    start();
   }
 
-  void decrementBpm() {
-    if (bpm > 40) bpm -= 5;
-    _recalculateInterval();
-    notifyListeners();
-  }
+  void startTimer() {
+    _timer?.cancel();
+    final interval = 60000 / _bpm; // milliseconds per beat
 
-  void setTimeSignature(int value) {
-    timeSignature = value;
-    currentBeat = 0;
-    notifyListeners();
+    _timer = Timer.periodic(Duration(milliseconds: interval.round()), (timer) {
+      _currentBeat = (_currentBeat % _timeSignature) + 1;
+      notifyListeners();
+    });
   }
 
   void disposeController() {
-    _ticker.dispose();
-    _player.dispose();
+    _timer?.cancel();
+    dispose();
   }
 }

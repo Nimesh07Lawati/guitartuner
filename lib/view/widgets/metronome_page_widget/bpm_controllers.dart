@@ -16,17 +16,73 @@ class BPMControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Text('BPM', style: TextStyle(color: Colors.white70)),
-        const SizedBox(height: 8),
+        const Text(
+          'BPM',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 16,
+            letterSpacing: 1.5,
+            fontWeight: FontWeight.w300,
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(onPressed: onMinus, icon: const Icon(Icons.remove)),
-            Text(
-              '$bpm',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            // Minus Button
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF2A2A2A),
+              ),
+              child: IconButton(
+                onPressed: onMinus,
+                icon: const Icon(Icons.remove),
+                color: const Color(0xFFF27121),
+                iconSize: 28,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
             ),
-            IconButton(onPressed: onPlus, icon: const Icon(Icons.add)),
+
+            const SizedBox(width: 20),
+
+            // BPM Display
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2A),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: const Color(0xFFF27121).withOpacity(0.3),
+                  width: 2,
+                ),
+              ),
+              child: Text(
+                '$bpm',
+                style: const TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 20),
+
+            // Plus Button
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF2A2A2A),
+              ),
+              child: IconButton(
+                onPressed: onPlus,
+                icon: const Icon(Icons.add),
+                color: const Color(0xFFF27121),
+                iconSize: 28,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
+            ),
           ],
         ),
       ],
