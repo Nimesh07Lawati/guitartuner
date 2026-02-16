@@ -18,7 +18,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   @override
   void initState() {
     super.initState();
-    controller = MetronomeController(this);
+    controller = MetronomeController();
 
     // Add listener to debug state changes
     controller.addListener(() {
