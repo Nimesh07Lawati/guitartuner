@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../models/guitar_string.dart';
+import '../../../../models/tuning_mode.dart';
 import '../../../../utils/audio_pitch_helper.dart';
 
 class GuitarTunerController extends ChangeNotifier {
@@ -11,13 +12,68 @@ class GuitarTunerController extends ChangeNotifier {
   int selectedStringIndex = 0;
   int? autoDetectedStringIndex;
 
-  final List<GuitarString> guitarStrings;
+  TuningMode _currentMode = TuningMode.standard;
 
-  GuitarTunerController(this.guitarStrings) {
+  GuitarTunerController(List<GuitarString> _) {
     audioHelper = AudioPitchHelper(
       detectionThreshold: 0.7,
       onFrequencyDetected: _onFrequencyDetected,
     );
+  }
+
+  // =========================
+  // GETTERS
+  // =========================
+
+  TuningMode get currentMode => _currentMode;
+
+  List<GuitarString> get guitarStrings => _currentMode.strings;
+
+  int get selectedIndex => selectedStringIndex;
+
+  int? get autoDetectedIndex => autoDetectedStringIndex;
+
+  GuitarString get currentString =>
+      guitarStrings[autoDetectedStringIndex ?? selectedStringIndex];
+
+  double get cents {
+    if (!isTuning || currentFrequency <= 0) return 0;
+
+    return AudioPitchHelper.centsDifference(
+      currentFrequency,
+      currentString.frequency,
+    ).clamp(-50.0, 50.0);
+  }
+
+  Color get statusColor {
+    if (!isTuning) return Colors.grey;
+
+    final diff = cents.abs();
+
+    if (diff <= 2) return Colors.green;
+    if (diff <= 8) return Colors.orange;
+    return Colors.red;
+  }
+
+  String get statusText {
+    if (!isTuning) return "Idle";
+
+    if (cents.abs() <= 2) return "Perfect";
+    if (cents > 0) return "Sharp";
+    return "Flat";
+  }
+
+  double get needleValue => cents;
+
+  // =========================
+  // METHODS
+  // =========================
+
+  void changeTuningMode(TuningMode mode) {
+    _currentMode = mode;
+    selectedStringIndex = 0;
+    autoDetectedStringIndex = null;
+    notifyListeners();
   }
 
   void _onFrequencyDetected(double freq) {
@@ -60,18 +116,5 @@ class GuitarTunerController extends ChangeNotifier {
     autoDetectedStringIndex = guitarStrings.indexWhere(
       (s) => s.frequency == closest,
     );
-  }
-
-  double get needleValue {
-    if (!isTuning || currentFrequency <= 0) return 0;
-    final target =
-        guitarStrings[autoDetectedStringIndex ?? selectedStringIndex].frequency;
-
-    final cents = AudioPitchHelper.centsDifference(
-      currentFrequency,
-      target,
-    ).clamp(-50.0, 50.0);
-
-    return cents.abs() < 1 ? 0 : cents;
   }
 }

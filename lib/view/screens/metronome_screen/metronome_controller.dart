@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/scheduler.dart';
 
 class MetronomeController extends ChangeNotifier {
   int bpm = 120;
@@ -8,80 +8,141 @@ class MetronomeController extends ChangeNotifier {
   int currentBeat = 0;
   bool isPlaying = false;
 
-  final AudioPlayer _player = AudioPlayer();
-  late Ticker _ticker;
+  final List<AudioPlayer> _playerPool = [];
+  int _currentPlayerIndex = 0;
+  static const int _poolSize = 6;
+
+  final Stopwatch _clock = Stopwatch();
+  Timer? _schedulerTimer;
 
   Duration _beatInterval = Duration.zero;
-  Duration _elapsed = Duration.zero;
+  int _scheduledBeat = 0;
+  bool _isAudioLoaded = false;
 
-  MetronomeController(TickerProvider vsync) {
-    _ticker = vsync.createTicker(_onTick);
-    _loadAudio();
+  // Lookahead scheduling window
+  static const Duration _scheduleAheadTime = Duration(milliseconds: 50);
+
+  MetronomeController() {
     _recalculateInterval();
+    _initializePlayerPool();
   }
 
-  Future<void> _loadAudio() async {
-    await _player.setSource(AssetSource('audio/tick.mp3'));
-    await _player.setReleaseMode(ReleaseMode.stop);
+  bool get isAudioLoaded => _isAudioLoaded;
+
+  Future<void> _initializePlayerPool() async {
+    try {
+      for (int i = 0; i < _poolSize; i++) {
+        final player = AudioPlayer();
+
+        await player.setPlayerMode(PlayerMode.lowLatency);
+        await player.setReleaseMode(ReleaseMode.stop);
+        await player.setSource(AssetSource('audio/tick_wav.wav'));
+
+        await player.setVolume(1.0);
+
+        _playerPool.add(player);
+      }
+
+      _isAudioLoaded = true;
+      notifyListeners();
+    } catch (_) {
+      _isAudioLoaded = false;
+      notifyListeners();
+    }
   }
 
   void _recalculateInterval() {
     _beatInterval = Duration(microseconds: (60000000 / bpm).round());
   }
 
-  void _onTick(Duration delta) {
-    if (!isPlaying) return;
+  // 🔥 STUDIO-STYLE SCHEDULER
+  void _scheduler() {
+    final now = _clock.elapsed;
 
-    _elapsed += delta;
-
-    if (_elapsed >= _beatInterval) {
-      _elapsed -= _beatInterval;
-      _triggerBeat();
+    while (_nextBeatTime <= now + _scheduleAheadTime) {
+      _playScheduledBeat();
+      _nextBeatTime += _beatInterval;
+      _scheduledBeat++;
     }
   }
 
-  void _triggerBeat() {
-    currentBeat = (currentBeat % timeSignature) + 1;
-    _player.resume(); // already preloaded → minimal latency
+  Duration _nextBeatTime = Duration.zero;
+
+  void _playScheduledBeat() {
+    currentBeat = (_scheduledBeat % timeSignature) + 1;
+
+    final player = _playerPool[_currentPlayerIndex];
+    _currentPlayerIndex = (_currentPlayerIndex + 1) % _poolSize;
+
+    player.stop();
+    player.resume();
+
     notifyListeners();
   }
 
   void start() {
-    if (isPlaying) return;
+    if (!_isAudioLoaded || isPlaying) return;
+
     isPlaying = true;
     currentBeat = 0;
-    _elapsed = Duration.zero;
-    _ticker.start();
+    _scheduledBeat = 0;
+
+    _clock.reset();
+    _clock.start();
+
+    _nextBeatTime = Duration.zero;
+
+    // Scheduler runs frequently but lightly
+    _schedulerTimer = Timer.periodic(const Duration(milliseconds: 10), (_) {
+      _scheduler();
+    });
+
     notifyListeners();
   }
 
   void stop() {
+    if (!isPlaying) return;
+
     isPlaying = false;
+
+    _schedulerTimer?.cancel();
+    _schedulerTimer = null;
+
+    _clock.stop();
+    _clock.reset();
+
     currentBeat = 0;
-    _ticker.stop();
+
+    for (var player in _playerPool) {
+      player.stop();
+    }
+
     notifyListeners();
   }
 
   void incrementBpm() {
-    if (bpm < 240) bpm += 5;
+    bpm = (bpm + 5).clamp(40, 240);
     _recalculateInterval();
     notifyListeners();
   }
 
   void decrementBpm() {
-    if (bpm > 40) bpm -= 5;
+    bpm = (bpm - 5).clamp(40, 240);
     _recalculateInterval();
     notifyListeners();
   }
 
   void setTimeSignature(int value) {
-    timeSignature = value;
-    currentBeat = 0;
-    notifyListeners();
+    if (value > 0 && value <= 16) {
+      timeSignature = value;
+      notifyListeners();
+    }
   }
 
   void disposeController() {
-    _ticker.dispose();
-    _player.dispose();
+    _schedulerTimer?.cancel();
+    for (var player in _playerPool) {
+      player.dispose();
+    }
   }
 }
