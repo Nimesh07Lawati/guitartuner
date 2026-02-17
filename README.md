@@ -36,6 +36,16 @@ A professional-grade Flutter application combining a precision guitar tuner and 
 - **Provider pattern** using Flutter's built-in `ChangeNotifier`
 - **Reactive UI updates** with `AnimatedBuilder`
 - **Separation of concerns** between controllers and views
+## 📱 Screenshots
+
+### Guitar Tuner
+![Guitar Tuner](screenshots/tuner.jpeg)
+
+### Advanced Metronome
+![Metronome](screenshots/metronome.jpeg)
+
+### Home Screen
+![Home Screen](screenshots/tuner_home_screen.jpeg)
 
 ### Key Technical Highlights
 ```dart
