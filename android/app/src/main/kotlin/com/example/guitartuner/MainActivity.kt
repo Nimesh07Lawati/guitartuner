@@ -1,4 +1,4 @@
-package com.example.guitartuner
+package com.nimesh.guitartuner
 
 import io.flutter.embedding.android.FlutterActivity
 
