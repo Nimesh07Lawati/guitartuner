@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:guitartuner/utils/audio_service.dart';
 
 class MetronomeController extends ChangeNotifier {
   int bpm = 120;
@@ -8,56 +8,27 @@ class MetronomeController extends ChangeNotifier {
   int currentBeat = 0;
   bool isPlaying = false;
 
-  // Two separate pools: one for the accented first beat, one for the
-  // regular follow-up beats. Each pool is pre-loaded with its own asset
-  // so there's no source-swapping latency at playback time.
-  final List<AudioPlayer> _firstBeatPool = [];
-  final List<AudioPlayer> _followUpBeatPool = [];
-  int _firstBeatPoolIndex = 0;
-  int _followUpPoolIndex = 0;
-  static const int _poolSize = 6;
+  final MetronomeAudioService _audioService = MetronomeAudioService();
 
   final Stopwatch _clock = Stopwatch();
   Timer? _schedulerTimer;
 
   Duration _beatInterval = Duration.zero;
   int _scheduledBeat = 0;
-  bool _isAudioLoaded = false;
 
   // Lookahead scheduling window
   static const Duration _scheduleAheadTime = Duration(milliseconds: 50);
 
   MetronomeController() {
     _recalculateInterval();
-    _initializePlayerPools();
+    _initializeAudio();
   }
 
-  bool get isAudioLoaded => _isAudioLoaded;
+  bool get isAudioLoaded => _audioService.isLoaded;
 
-  Future<void> _initializePlayerPools() async {
-    try {
-      for (int i = 0; i < _poolSize; i++) {
-        final firstBeatPlayer = AudioPlayer();
-        await firstBeatPlayer.setPlayerMode(PlayerMode.lowLatency);
-        await firstBeatPlayer.setReleaseMode(ReleaseMode.stop);
-        await firstBeatPlayer.setSource(AssetSource('audio/first_beat.wav'));
-        await firstBeatPlayer.setVolume(1.0);
-        _firstBeatPool.add(firstBeatPlayer);
-
-        final followUpPlayer = AudioPlayer();
-        await followUpPlayer.setPlayerMode(PlayerMode.lowLatency);
-        await followUpPlayer.setReleaseMode(ReleaseMode.stop);
-        await followUpPlayer.setSource(AssetSource('audio/follow_up_beat.wav'));
-        await followUpPlayer.setVolume(1.0);
-        _followUpBeatPool.add(followUpPlayer);
-      }
-
-      _isAudioLoaded = true;
-      notifyListeners();
-    } catch (_) {
-      _isAudioLoaded = false;
-      notifyListeners();
-    }
+  Future<void> _initializeAudio() async {
+    await _audioService.initialize();
+    notifyListeners();
   }
 
   void _recalculateInterval() {
@@ -82,22 +53,16 @@ class MetronomeController extends ChangeNotifier {
     currentBeat = (_scheduledBeat % timeSignature) + 1;
 
     if (isFirstBeat) {
-      final player = _firstBeatPool[_firstBeatPoolIndex];
-      _firstBeatPoolIndex = (_firstBeatPoolIndex + 1) % _poolSize;
-      player.stop();
-      player.resume();
+      _audioService.playFirstBeat();
     } else {
-      final player = _followUpBeatPool[_followUpPoolIndex];
-      _followUpPoolIndex = (_followUpPoolIndex + 1) % _poolSize;
-      player.stop();
-      player.resume();
+      _audioService.playFollowUpBeat();
     }
 
     notifyListeners();
   }
 
   void start() {
-    if (!_isAudioLoaded || isPlaying) return;
+    if (!isAudioLoaded || isPlaying) return;
 
     isPlaying = true;
     currentBeat = 0;
@@ -129,12 +94,7 @@ class MetronomeController extends ChangeNotifier {
 
     currentBeat = 0;
 
-    for (var player in _firstBeatPool) {
-      player.stop();
-    }
-    for (var player in _followUpBeatPool) {
-      player.stop();
-    }
+    _audioService.stopAll();
 
     notifyListeners();
   }
@@ -160,11 +120,6 @@ class MetronomeController extends ChangeNotifier {
 
   void disposeController() {
     _schedulerTimer?.cancel();
-    for (var player in _firstBeatPool) {
-      player.dispose();
-    }
-    for (var player in _followUpBeatPool) {
-      player.dispose();
-    }
+    _audioService.dispose();
   }
 }
