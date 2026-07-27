@@ -46,7 +46,7 @@ class TuningHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [statusColor, statusColor.withOpacity(0.7)],
+                colors: [statusColor, statusColor.withValues(alpha: 0.7)],
               ),
               borderRadius: BorderRadius.circular(20),
             ),

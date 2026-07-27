@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                           shadows: [
                             Shadow(
                               blurRadius: 6.0,
-                              color: Colors.black.withOpacity(0.4),
+                              color: Colors.black.withValues(alpha: 0.4),
                               offset: const Offset(2.0, 2.0),
                             ),
                           ],
@@ -108,7 +108,9 @@ class HomeScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(15),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8A2387).withOpacity(0.4),
+                                color: const Color(
+                                  0xFF8A2387,
+                                ).withValues(alpha: 0.4),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -165,17 +167,19 @@ class HomeScreen extends StatelessWidget {
                             );
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.1),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.1,
+                            ),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
                               side: BorderSide(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 width: 1.5,
                               ),
                             ),
                             elevation: 5,
-                            shadowColor: Colors.black.withOpacity(0.3),
+                            shadowColor: Colors.black.withValues(alpha: 0.3),
                           ),
                           child: const Text(
                             'Metronome',
@@ -215,17 +219,6 @@ class HomeScreen extends StatelessWidget {
               ),
 
               // Bottom "Created by" text
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-                child: Text(
-                  'Created by Nimesh Lawati',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.6),
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -240,14 +233,14 @@ class HomeScreen extends StatelessWidget {
       height: 40,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
+          colors: [color.withValues(alpha: 0.8), color.withValues(alpha: 0.3)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
         borderRadius: BorderRadius.circular(2),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

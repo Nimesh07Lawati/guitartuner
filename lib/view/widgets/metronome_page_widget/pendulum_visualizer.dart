@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 class PendulumVisualizer extends StatefulWidget {
   final int beats;
@@ -94,7 +93,7 @@ class _PendulumVisualizerState extends State<PendulumVisualizer>
                                 (beat == 1
                                         ? Colors.green
                                         : const Color(0xFFF27121))
-                                    .withOpacity(0.5),
+                                    .withValues(alpha: 0.5),
                             blurRadius: 10,
                             spreadRadius: 2,
                           ),
@@ -160,7 +159,9 @@ class _PendulumVisualizerState extends State<PendulumVisualizer>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF27121).withOpacity(0.3),
+                              color: const Color(
+                                0xFFF27121,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 15,
                               spreadRadius: 2,
                             ),

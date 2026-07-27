@@ -53,7 +53,7 @@ class BPMControls extends StatelessWidget {
                 color: const Color(0xFF2A2A2A),
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(
-                  color: const Color(0xFFF27121).withOpacity(0.3),
+                  color: const Color(0xFFF27121).withValues(alpha: 0.3),
                   width: 2,
                 ),
               ),
