@@ -37,7 +37,7 @@ void pitchDetectionIsolate(SendPort mainSendPort) {
       final result = await detector!.getPitchFromFloatBuffer(samples);
       replyPort.send(result);
     } catch (e) {
-      print('❌ Isolate error: $e');
+      //print('❌ Isolate error: $e');
     }
   });
 }
@@ -84,16 +84,16 @@ class AudioPitchHelper {
   Future<void> _initIsolate() async {
     if (_isolateSendPort != null) return;
 
-    print('🚀 Spawning pitch detection isolate...');
+    // print('🚀 Spawning pitch detection isolate...');
     final readyPort = ReceivePort();
     _isolate = await Isolate.spawn(pitchDetectionIsolate, readyPort.sendPort);
     _isolateSendPort = await readyPort.first as SendPort;
-    print('✅ Pitch detection isolate ready');
+    //print('✅ Pitch detection isolate ready');
   }
 
   Future<void> start() async {
     if (_isRunning) {
-      print('⚠️ AudioPitchHelper already running');
+      //print('⚠️ AudioPitchHelper already running');
       return;
     }
 
@@ -106,18 +106,18 @@ class AudioPitchHelper {
 
     try {
       if (!_isInitialized) {
-        print('🔧 Initializing FlutterAudioCapture...');
+        //print('🔧 Initializing FlutterAudioCapture...');
         await _audioCapture.init();
         _isInitialized = true;
       }
 
-      print('🎙️ Starting audio capture...');
+      //  print('🎙️ Starting audio capture...');
       await _audioCapture.start(listener, (error) {
-        print('❌ Audio capture error: $error');
+        // print('❌ Audio capture error: $error');
       }, sampleRate: sampleRate);
       _isRunning = true;
     } catch (e) {
-      print('❌ Error starting audio capture: $e');
+      // print('❌ Error starting audio capture: $e');
     }
   }
 
@@ -149,7 +149,7 @@ class AudioPitchHelper {
       }
     } catch (e) {
       if (_audioDataCallCount <= 10) {
-        print('❌ AudioPitchHelper process error: $e');
+        //  print('❌ AudioPitchHelper process error: $e');
       }
     } finally {
       _isProcessing = false;
@@ -219,9 +219,9 @@ class AudioPitchHelper {
       _validPitchCount++;
 
       if (_validPitchCount % 15 == 0) {
-        print(
-          '✅ Pitch: ${smoothedPitch.toStringAsFixed(2)} Hz | Confidence: ${prob.toStringAsFixed(2)} | Buffer: ${_pitchBuffer.length}',
-        );
+        // print(
+        //  '✅ Pitch: ${smoothedPitch.toStringAsFixed(2)} Hz | Confidence: ${prob.toStringAsFixed(2)} | Buffer: ${_pitchBuffer.length}',
+        // );
       }
 
       // Send smoothed pitch for display
@@ -251,7 +251,7 @@ class AudioPitchHelper {
 
   Future<void> stop() async {
     if (!_isRunning) return;
-    print('🛑 Stopping audio capture...');
+    //print('🛑 Stopping audio capture...');
     _isRunning = false;
     _pitchBuffer.clear();
     await _audioCapture.stop();
@@ -260,7 +260,7 @@ class AudioPitchHelper {
   void dispose() {
     stop();
     if (_isolate != null) {
-      print('🧹 Killing pitch detection isolate...');
+      //print('🧹 Killing pitch detection isolate...');
       _isolate!.kill(priority: Isolate.immediate);
       _isolate = null;
       _isolateSendPort = null;
