@@ -8,8 +8,13 @@ class MetronomeController extends ChangeNotifier {
   int currentBeat = 0;
   bool isPlaying = false;
 
-  final List<AudioPlayer> _playerPool = [];
-  int _currentPlayerIndex = 0;
+  // Two separate pools: one for the accented first beat, one for the
+  // regular follow-up beats. Each pool is pre-loaded with its own asset
+  // so there's no source-swapping latency at playback time.
+  final List<AudioPlayer> _firstBeatPool = [];
+  final List<AudioPlayer> _followUpBeatPool = [];
+  int _firstBeatPoolIndex = 0;
+  int _followUpPoolIndex = 0;
   static const int _poolSize = 6;
 
   final Stopwatch _clock = Stopwatch();
@@ -24,23 +29,27 @@ class MetronomeController extends ChangeNotifier {
 
   MetronomeController() {
     _recalculateInterval();
-    _initializePlayerPool();
+    _initializePlayerPools();
   }
 
   bool get isAudioLoaded => _isAudioLoaded;
 
-  Future<void> _initializePlayerPool() async {
+  Future<void> _initializePlayerPools() async {
     try {
       for (int i = 0; i < _poolSize; i++) {
-        final player = AudioPlayer();
+        final firstBeatPlayer = AudioPlayer();
+        await firstBeatPlayer.setPlayerMode(PlayerMode.lowLatency);
+        await firstBeatPlayer.setReleaseMode(ReleaseMode.stop);
+        await firstBeatPlayer.setSource(AssetSource('audio/first_beat.wav'));
+        await firstBeatPlayer.setVolume(1.0);
+        _firstBeatPool.add(firstBeatPlayer);
 
-        await player.setPlayerMode(PlayerMode.lowLatency);
-        await player.setReleaseMode(ReleaseMode.stop);
-        await player.setSource(AssetSource('audio/tick_wav.wav'));
-
-        await player.setVolume(1.0);
-
-        _playerPool.add(player);
+        final followUpPlayer = AudioPlayer();
+        await followUpPlayer.setPlayerMode(PlayerMode.lowLatency);
+        await followUpPlayer.setReleaseMode(ReleaseMode.stop);
+        await followUpPlayer.setSource(AssetSource('audio/follow_up_beat.wav'));
+        await followUpPlayer.setVolume(1.0);
+        _followUpBeatPool.add(followUpPlayer);
       }
 
       _isAudioLoaded = true;
@@ -69,13 +78,20 @@ class MetronomeController extends ChangeNotifier {
   Duration _nextBeatTime = Duration.zero;
 
   void _playScheduledBeat() {
+    final isFirstBeat = _scheduledBeat % timeSignature == 0;
     currentBeat = (_scheduledBeat % timeSignature) + 1;
 
-    final player = _playerPool[_currentPlayerIndex];
-    _currentPlayerIndex = (_currentPlayerIndex + 1) % _poolSize;
-
-    player.stop();
-    player.resume();
+    if (isFirstBeat) {
+      final player = _firstBeatPool[_firstBeatPoolIndex];
+      _firstBeatPoolIndex = (_firstBeatPoolIndex + 1) % _poolSize;
+      player.stop();
+      player.resume();
+    } else {
+      final player = _followUpBeatPool[_followUpPoolIndex];
+      _followUpPoolIndex = (_followUpPoolIndex + 1) % _poolSize;
+      player.stop();
+      player.resume();
+    }
 
     notifyListeners();
   }
@@ -113,7 +129,10 @@ class MetronomeController extends ChangeNotifier {
 
     currentBeat = 0;
 
-    for (var player in _playerPool) {
+    for (var player in _firstBeatPool) {
+      player.stop();
+    }
+    for (var player in _followUpBeatPool) {
       player.stop();
     }
 
@@ -141,7 +160,10 @@ class MetronomeController extends ChangeNotifier {
 
   void disposeController() {
     _schedulerTimer?.cancel();
-    for (var player in _playerPool) {
+    for (var player in _firstBeatPool) {
+      player.dispose();
+    }
+    for (var player in _followUpBeatPool) {
       player.dispose();
     }
   }
