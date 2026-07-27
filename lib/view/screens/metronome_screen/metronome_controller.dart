@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:guitartuner/utils/audio_service.dart';
 
 class MetronomeController extends ChangeNotifier {
   int bpm = 120;
@@ -8,47 +8,27 @@ class MetronomeController extends ChangeNotifier {
   int currentBeat = 0;
   bool isPlaying = false;
 
-  final List<AudioPlayer> _playerPool = [];
-  int _currentPlayerIndex = 0;
-  static const int _poolSize = 6;
+  final MetronomeAudioService _audioService = MetronomeAudioService();
 
   final Stopwatch _clock = Stopwatch();
   Timer? _schedulerTimer;
 
   Duration _beatInterval = Duration.zero;
   int _scheduledBeat = 0;
-  bool _isAudioLoaded = false;
 
   // Lookahead scheduling window
   static const Duration _scheduleAheadTime = Duration(milliseconds: 50);
 
   MetronomeController() {
     _recalculateInterval();
-    _initializePlayerPool();
+    _initializeAudio();
   }
 
-  bool get isAudioLoaded => _isAudioLoaded;
+  bool get isAudioLoaded => _audioService.isLoaded;
 
-  Future<void> _initializePlayerPool() async {
-    try {
-      for (int i = 0; i < _poolSize; i++) {
-        final player = AudioPlayer();
-
-        await player.setPlayerMode(PlayerMode.lowLatency);
-        await player.setReleaseMode(ReleaseMode.stop);
-        await player.setSource(AssetSource('audio/tick_wav.wav'));
-
-        await player.setVolume(1.0);
-
-        _playerPool.add(player);
-      }
-
-      _isAudioLoaded = true;
-      notifyListeners();
-    } catch (_) {
-      _isAudioLoaded = false;
-      notifyListeners();
-    }
+  Future<void> _initializeAudio() async {
+    await _audioService.initialize();
+    notifyListeners();
   }
 
   void _recalculateInterval() {
@@ -69,19 +49,20 @@ class MetronomeController extends ChangeNotifier {
   Duration _nextBeatTime = Duration.zero;
 
   void _playScheduledBeat() {
+    final isFirstBeat = _scheduledBeat % timeSignature == 0;
     currentBeat = (_scheduledBeat % timeSignature) + 1;
 
-    final player = _playerPool[_currentPlayerIndex];
-    _currentPlayerIndex = (_currentPlayerIndex + 1) % _poolSize;
-
-    player.stop();
-    player.resume();
+    if (isFirstBeat) {
+      _audioService.playFirstBeat();
+    } else {
+      _audioService.playFollowUpBeat();
+    }
 
     notifyListeners();
   }
 
   void start() {
-    if (!_isAudioLoaded || isPlaying) return;
+    if (!isAudioLoaded || isPlaying) return;
 
     isPlaying = true;
     currentBeat = 0;
@@ -113,9 +94,7 @@ class MetronomeController extends ChangeNotifier {
 
     currentBeat = 0;
 
-    for (var player in _playerPool) {
-      player.stop();
-    }
+    _audioService.stopAll();
 
     notifyListeners();
   }
@@ -141,8 +120,6 @@ class MetronomeController extends ChangeNotifier {
 
   void disposeController() {
     _schedulerTimer?.cancel();
-    for (var player in _playerPool) {
-      player.dispose();
-    }
+    _audioService.dispose();
   }
 }

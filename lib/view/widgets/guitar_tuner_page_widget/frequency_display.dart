@@ -34,7 +34,7 @@ class FrequencyDisplay extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(15),
         border: autoDetected
-            ? Border.all(color: Colors.orange.withOpacity(0.6), width: 2)
+            ? Border.all(color: Colors.orange.withValues(alpha: 0.6), width: 2)
             : null,
       ),
       child: Column(

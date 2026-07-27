@@ -33,7 +33,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/audio/tick_wav.wav
+    - assets/audio/
 
 flutter_launcher_icons:
   android: true
