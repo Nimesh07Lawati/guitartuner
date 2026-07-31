@@ -45,14 +45,9 @@ class FrequencyDisplay extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.auto_awesome,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
                   const SizedBox(width: 4),
                   Text(
-                    'Auto-detected: ${currentString.name} (String ${currentString.stringNumber})',
+                    '${currentString.name} (String ${currentString.stringNumber})',
                     style: const TextStyle(
                       fontSize: 11,
                       color: Colors.orange,

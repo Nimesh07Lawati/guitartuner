@@ -72,16 +72,15 @@ class MetronomeAudioService {
     if (!_isLoaded) return;
     final player = _accentPool[_accentPoolIndex];
     _accentPoolIndex = (_accentPoolIndex + 1) % poolSize;
-    player.stop();
+    player.seek(Duration.zero);
     player.resume();
   }
 
-  /// Plays the regular follow-up beat — same sample, quieter + normal pitch.
   void playFollowUpBeat() {
     if (!_isLoaded) return;
     final player = _regularPool[_regularPoolIndex];
     _regularPoolIndex = (_regularPoolIndex + 1) % poolSize;
-    player.stop();
+    player.seek(Duration.zero);
     player.resume();
   }
 

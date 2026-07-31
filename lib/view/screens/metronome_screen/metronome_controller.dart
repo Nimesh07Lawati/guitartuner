@@ -35,7 +35,7 @@ class MetronomeController extends ChangeNotifier {
     _beatInterval = Duration(microseconds: (60000000 / bpm).round());
   }
 
-  // 🔥 STUDIO-STYLE SCHEDULER
+  // STUDIO-STYLE SCHEDULER
   void _scheduler() {
     final now = _clock.elapsed;
 
@@ -100,13 +100,13 @@ class MetronomeController extends ChangeNotifier {
   }
 
   void incrementBpm() {
-    bpm = (bpm + 5).clamp(40, 240);
+    bpm = (bpm + 1).clamp(40, 240);
     _recalculateInterval();
     notifyListeners();
   }
 
   void decrementBpm() {
-    bpm = (bpm - 5).clamp(40, 240);
+    bpm = (bpm - 1).clamp(40, 240);
     _recalculateInterval();
     notifyListeners();
   }
