@@ -185,13 +185,6 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                       ),
                     ),
                   ),
-
-                  // Debug info (remove after testing)
-                  const SizedBox(height: 10),
-                  Text(
-                    'Debug: ${controller.isPlaying ? "Playing" : "Stopped"} - Beat ${controller.currentBeat}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
                 ],
               ),
             ),
