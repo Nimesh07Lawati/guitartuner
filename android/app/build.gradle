@@ -11,7 +11,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 android {
     namespace = "com.nimesh.guitartuner"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -48,9 +48,7 @@ android {
             signingConfig = signingConfigs.release  
             minifyEnabled = false
             shrinkResources = false
-              ndk {
-            debugSymbolLevel = 'none'
-        }
+           
         }
     }
 }
