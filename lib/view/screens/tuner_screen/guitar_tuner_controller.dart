@@ -14,7 +14,7 @@ class GuitarTunerController extends ChangeNotifier {
 
   TuningMode _currentMode = TuningMode.standard;
 
-  GuitarTunerController(List<GuitarString> _) {
+  GuitarTunerController() {
     audioHelper = AudioPitchHelper(
       detectionThreshold: 0.7,
       onFrequencyDetected: _onFrequencyDetected,
@@ -70,9 +70,18 @@ class GuitarTunerController extends ChangeNotifier {
   // =========================
 
   void changeTuningMode(TuningMode mode) {
+    if (mode.name == _currentMode.name) return;
+
     _currentMode = mode;
     selectedStringIndex = 0;
     autoDetectedStringIndex = null;
+
+    // Drop the previous reading. The old frequency was matched against the
+    // old mode's targets, so leaving it in place makes the gauge show a
+    // cents error against a string that is no longer selected until the
+    // next buffer arrives.
+    currentFrequency = 0;
+
     notifyListeners();
   }
 

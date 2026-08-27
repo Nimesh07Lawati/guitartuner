@@ -4,7 +4,7 @@ import 'package:guitartuner/view/widgets/guitar_tuner_page_widget/radial_gauge.d
 import 'package:guitartuner/view/widgets/guitar_tuner_page_widget/string_selector.dart';
 import 'package:guitartuner/view/widgets/guitar_tuner_page_widget/tuning_button.dart';
 import 'package:guitartuner/view/widgets/guitar_tuner_page_widget/tuning_header.dart';
-import '../../../../models/guitar_string.dart';
+import 'package:guitartuner/view/widgets/guitar_tuner_page_widget/tuning_mode_selector.dart';
 import 'guitar_tuner_controller.dart';
 
 class GuitarTunerScreen extends StatefulWidget {
@@ -17,19 +17,10 @@ class GuitarTunerScreen extends StatefulWidget {
 class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
   late GuitarTunerController controller;
 
-  final guitarStrings = const [
-    GuitarString(name: 'E', note: 'E', frequency: 82.41, stringNumber: 6),
-    GuitarString(name: 'A', note: 'A', frequency: 110.00, stringNumber: 5),
-    GuitarString(name: 'D', note: 'D', frequency: 146.83, stringNumber: 4),
-    GuitarString(name: 'G', note: 'G', frequency: 196.00, stringNumber: 3),
-    GuitarString(name: 'B', note: 'B', frequency: 246.94, stringNumber: 2),
-    GuitarString(name: 'E', note: 'E', frequency: 329.63, stringNumber: 1),
-  ];
-
   @override
   void initState() {
     super.initState();
-    controller = GuitarTunerController(guitarStrings);
+    controller = GuitarTunerController();
   }
 
   @override
@@ -57,6 +48,11 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                   mode: controller.currentMode,
                   statusText: controller.statusText,
                   statusColor: controller.statusColor,
+                  onTapMode: () => TuningModeSelector.show(
+                    context,
+                    current: controller.currentMode,
+                    onSelect: controller.changeTuningMode,
+                  ),
                 ),
 
                 const SizedBox(height: 10),
@@ -65,7 +61,7 @@ class _GuitarTunerScreenState extends State<GuitarTunerScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: StringSelector(
-                    strings: guitarStrings,
+                    strings: controller.guitarStrings,
                     selectedIndex: controller.selectedIndex,
                     autoDetectedIndex: controller.autoDetectedIndex,
                     onSelect: controller.selectString,

@@ -19,11 +19,15 @@ class AudioPitchHelper {
   bool _isRunning = false;
   bool _isInitialized = false;
   int _audioDataCallCount = 0;
-  int _validPitchCount = 0;
   bool _isProcessing = false;
 
-  // Pitch detector now lives directly on the main isolate — no message
-  // passing needed since a single buffer analysis is sub-millisecond.
+  // Pitch detector runs on the main isolate. YIN's difference function is
+  // O(bufferSize^2) — roughly 1M iterations at the default 2048 — so each
+  // buffer blocks the UI thread for a few ms. That is still cheaper than the
+  // per-buffer ReceivePort churn the old isolate version paid. If low-end
+  // devices ever show jank on the tuner screen, halve `bufferSize`: the cost
+  // is quadratic, so 1024 quarters the work and still resolves guitar's
+  // 82-330Hz range comfortably.
   PitchDetector? _detector;
 
   // Improved pitch smoothing
@@ -32,8 +36,12 @@ class AudioPitchHelper {
   static const double _confidenceThreshold = 0.7; // Higher confidence threshold
 
   // Frequency validation
-  static const double _minValidFrequency = 65.0; // Lowered for bass strings
-  static const double _maxValidFrequency = 450.0; // For high E string harmonics
+  // Floor has to clear the lowest target we ship (Drop C's C2 at 65.41Hz)
+  // with room to spare, or a string that is genuinely flat reads as silence
+  // and the tuner shows nothing at the exact moment it is needed. 60Hz gives
+  // C2 a full semitone of headroom below pitch.
+  static const double minValidFrequency = 60.0;
+  static const double maxValidFrequency = 450.0; // For high E string harmonics
 
   AudioPitchHelper({
     required this.onFrequencyDetected,
@@ -59,7 +67,6 @@ class AudioPitchHelper {
     _initDetector();
 
     _audioDataCallCount = 0;
-    _validPitchCount = 0;
     _isProcessing = false;
     _pitchBuffer.clear();
 
@@ -126,14 +133,11 @@ class AudioPitchHelper {
     if (_detector == null) return;
 
     try {
-      final result = await _detector!
-          .getPitchFromFloatBuffer(samples)
-          .timeout(
-            const Duration(milliseconds: 150),
-            onTimeout: () =>
-                PitchDetectorResult(pitch: 0, probability: 0, pitched: false),
-          );
-
+      // No timeout here: YIN does all its work synchronously and only wraps
+      // the result in a Future at the very end, so the future is already
+      // complete by the time anything could attach to it. The only real lever
+      // on how long this blocks is `bufferSize`, below.
+      final result = await _detector!.getPitchFromFloatBuffer(samples);
       _handleResult(result);
     } catch (e) {
       // Silently handle detection errors
@@ -148,8 +152,8 @@ class AudioPitchHelper {
     // Improved validation with guitar-specific frequency range
     if (pitched == true &&
         prob > _confidenceThreshold &&
-        pitch >= _minValidFrequency &&
-        pitch <= _maxValidFrequency) {
+        pitch >= minValidFrequency &&
+        pitch <= maxValidFrequency) {
       // Add to buffer for smoothing
       _pitchBuffer.add(pitch);
 
@@ -160,8 +164,6 @@ class AudioPitchHelper {
 
       // Calculate median for more stable reading (better than average for pitch)
       final smoothedPitch = _calculateMedian(_pitchBuffer);
-
-      _validPitchCount++;
 
       // Send smoothed pitch for display
       onFrequencyDetected(smoothedPitch);
