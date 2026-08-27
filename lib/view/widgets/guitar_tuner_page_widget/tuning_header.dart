@@ -6,11 +6,15 @@ class TuningHeader extends StatelessWidget {
   final String statusText;
   final Color statusColor;
 
+  /// Tapping the tuning name opens the mode picker.
+  final VoidCallback onTapMode;
+
   const TuningHeader({
     super.key,
     required this.mode,
     required this.statusText,
     required this.statusColor,
+    required this.onTapMode,
   });
 
   @override
@@ -21,26 +25,61 @@ class TuningHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Current Tuning',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
-              ),
-              Text(
-                mode.name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+          Flexible(
+            child: InkWell(
+              onTap: onTapMode,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Tuning',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            mode.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: Colors.orange,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      mode.description,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade400,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                mode.description,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
-              ),
-            ],
+            ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

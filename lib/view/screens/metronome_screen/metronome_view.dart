@@ -18,13 +18,6 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   void initState() {
     super.initState();
     controller = MetronomeController();
-
-    // Add listener to debug state changes
-    controller.addListener(() {
-      debugPrint(
-        'Metronome State - Playing: ${controller.isPlaying}, Beat: ${controller.currentBeat}, BPM: ${controller.bpm}',
-      );
-    });
   }
 
   @override
@@ -144,6 +137,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                       beats: controller.timeSignature,
                       currentBeat: controller.currentBeat,
                       isPlaying: controller.isPlaying,
+                      beatInterval: controller.beatInterval,
                     ),
                   ),
 
@@ -156,9 +150,6 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     child: ElevatedButton(
                       onPressed: () {
-                        debugPrint(
-                          'Button pressed - isPlaying: ${controller.isPlaying}',
-                        );
                         if (controller.isPlaying) {
                           controller.stop();
                         } else {

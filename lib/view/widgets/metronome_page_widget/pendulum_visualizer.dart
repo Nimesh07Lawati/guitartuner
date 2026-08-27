@@ -4,12 +4,14 @@ class PendulumVisualizer extends StatefulWidget {
   final int beats;
   final int currentBeat;
   final bool isPlaying;
+  final Duration beatInterval;
 
   const PendulumVisualizer({
     super.key,
     required this.beats,
     required this.currentBeat,
     required this.isPlaying,
+    required this.beatInterval,
   });
 
   @override
@@ -21,12 +23,21 @@ class _PendulumVisualizerState extends State<PendulumVisualizer>
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
 
+  // The swing must never take longer than the beat itself, or a fast
+  // tempo restarts it mid-motion every beat and it visibly glitches
+  // instead of swinging.
+  Duration _swingDurationFor(Duration beatInterval) {
+    final capped = beatInterval * 0.9;
+    const maxDuration = Duration(milliseconds: 300);
+    return capped < maxDuration ? capped : maxDuration;
+  }
+
   @override
   void initState() {
     super.initState();
     _swingController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: _swingDurationFor(widget.beatInterval),
     );
 
     _swingAnimation = Tween<double>(begin: -0.3, end: 0.3).animate(
@@ -37,6 +48,10 @@ class _PendulumVisualizerState extends State<PendulumVisualizer>
   @override
   void didUpdateWidget(PendulumVisualizer oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (widget.beatInterval != oldWidget.beatInterval) {
+      _swingController.duration = _swingDurationFor(widget.beatInterval);
+    }
 
     // Trigger swing animation on beat change
     if (widget.currentBeat != oldWidget.currentBeat && widget.isPlaying) {
