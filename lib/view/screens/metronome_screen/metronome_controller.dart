@@ -16,8 +16,12 @@ class MetronomeController extends ChangeNotifier {
   Duration _beatInterval = Duration.zero;
   int _scheduledBeat = 0;
 
-  // Lookahead scheduling window
-  static const Duration _scheduleAheadTime = Duration(milliseconds: 50);
+  // How often the scheduler polls the clock. `audioplayers` has no
+  // sample-accurate "play at future time" API, so playback always starts
+  // the instant `resume()` is called — there's no benefit to scheduling
+  // beats ahead of time, only cost (a fixed early-trigger offset). Instead
+  // we poll tightly and fire a beat exactly when it's due.
+  static const Duration _tickInterval = Duration(milliseconds: 5);
 
   MetronomeController() {
     _recalculateInterval();
@@ -25,6 +29,7 @@ class MetronomeController extends ChangeNotifier {
   }
 
   bool get isAudioLoaded => _audioService.isLoaded;
+  Duration get beatInterval => _beatInterval;
 
   Future<void> _initializeAudio() async {
     await _audioService.initialize();
@@ -35,11 +40,19 @@ class MetronomeController extends ChangeNotifier {
     _beatInterval = Duration(microseconds: (60000000 / bpm).round());
   }
 
-  // STUDIO-STYLE SCHEDULER
   void _scheduler() {
     final now = _clock.elapsed;
 
-    while (_nextBeatTime <= now + _scheduleAheadTime) {
+    // If a stall (GC pause, jank, etc.) put us more than a beat behind,
+    // resync silently instead of firing a rapid burst of "catch-up" clicks.
+    if (now - _nextBeatTime > _beatInterval) {
+      final missedBeats =
+          (now - _nextBeatTime).inMicroseconds ~/ _beatInterval.inMicroseconds;
+      _nextBeatTime += _beatInterval * missedBeats;
+      _scheduledBeat += missedBeats;
+    }
+
+    while (_nextBeatTime <= now) {
       _playScheduledBeat();
       _nextBeatTime += _beatInterval;
       _scheduledBeat++;
@@ -74,7 +87,7 @@ class MetronomeController extends ChangeNotifier {
     _nextBeatTime = Duration.zero;
 
     // Scheduler runs frequently but lightly
-    _schedulerTimer = Timer.periodic(const Duration(milliseconds: 10), (_) {
+    _schedulerTimer = Timer.periodic(_tickInterval, (_) {
       _scheduler();
     });
 
